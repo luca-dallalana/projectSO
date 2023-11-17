@@ -8,7 +8,7 @@
 #include "parser.h"
 
 int main(int argc, char *argv[]) {
-  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
+  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay que nunca sera negativo
 
   if (argc > 1) {
     char *endptr;
