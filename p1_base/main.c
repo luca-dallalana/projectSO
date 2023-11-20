@@ -8,11 +8,10 @@
 #include "parser.h"
 
 int main(int argc, char *argv[]) {
-  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay que nunca sera negativo
-
+  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay that will not be negative
   if (argc > 1) {
     char *endptr;
-    unsigned long int delay = strtoul(argv[1], &endptr, 10);
+    unsigned long int delay = strtoul(argv[1], &endptr, 10); // delay that will not be negativej
 
     if (*endptr != '\0' || delay > UINT_MAX) {
       fprintf(stderr, "Invalid delay value or value too large\n");

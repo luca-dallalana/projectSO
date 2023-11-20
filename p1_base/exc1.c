@@ -3,7 +3,8 @@
 #include <errno.h>
 #include <string.h>
 #include <dirent.h>
-#define MAX_PATH_SIZE 256
+#include <stdio.h>
+#define MAX_PATH_SIZE 256 + 2
 #define BUFFER_SIZE 1024
 
 int main(){
