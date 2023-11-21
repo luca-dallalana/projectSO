@@ -61,12 +61,12 @@ int main(int argc, char *argv[]) {
         closedir(dir);
         return 1;
       }
+
     while (1) {
       unsigned int event_id, delay;
       size_t num_rows, num_columns, num_coords;
       size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
 
-      printf("> ");
       fflush(stdout);
 
       switch (get_next(fileDescriptor)) {
@@ -151,12 +151,13 @@ int main(int argc, char *argv[]) {
 
         case EOC:
           ems_terminate();
+          closedir(dir);
+          // add um break
           return 0;
         }
      }
     close(fileDescriptor);
     }
   }
-  closedir(dir);
   return 0;
 }
