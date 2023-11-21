@@ -46,7 +46,6 @@ int main(int argc, char *argv[]) {
     }
   
   int fileDescriptor; // the result of a file operation
-  char buffer[BUFFER_SIZE];
 
   while ((entry = readdir(dir)) != NULL) { // while there are directories to be read
     if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
@@ -62,27 +61,6 @@ int main(int argc, char *argv[]) {
         closedir(dir);
         return 1;
       }
-
-      ssize_t bytesRead;
-      while ((bytesRead = read(fileDescriptor, buffer, sizeof(buffer))) > 0) { // while there bytes to be read
-        if (write(1, buffer, bytesRead) == -1) { // If there is an error in the writing process
-          const char *errorMessage = "Error writing in the file\n";
-          write(2, errorMessage, strlen(errorMessage)); 
-          write(2, strerror(errno), strlen(strerror(errno))); 
-          close(fileDescriptor);
-          closedir(dir);
-          return 1;
-        }
-      }
-
-      if (bytesRead == -1) { // If there are errors reading the file
-        const char *errorMessage = "Error reading the file\n";
-        write(2, errorMessage, strlen(errorMessage)); 
-        write(2, strerror(errno), strlen(strerror(errno))); 
-        close(fileDescriptor);
-        closedir(dir);
-        return 1;
-      }
     while (1) {
       unsigned int event_id, delay;
       size_t num_rows, num_columns, num_coords;
@@ -91,9 +69,9 @@ int main(int argc, char *argv[]) {
       printf("> ");
       fflush(stdout);
 
-      switch (get_next(STDIN_FILENO)) {
+      switch (get_next(fileDescriptor)) {
         case CMD_CREATE:
-          if (parse_create(STDIN_FILENO, &event_id, &num_rows, &num_columns) != 0) {
+          if (parse_create(fileDescriptor, &event_id, &num_rows, &num_columns) != 0) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");
             continue;
           }
@@ -105,7 +83,7 @@ int main(int argc, char *argv[]) {
           break;
 
         case CMD_RESERVE:
-          num_coords = parse_reserve(STDIN_FILENO, MAX_RESERVATION_SIZE, &event_id, xs, ys);
+          num_coords = parse_reserve(fileDescriptor, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
           if (num_coords == 0) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");
@@ -119,7 +97,7 @@ int main(int argc, char *argv[]) {
           break;
 
         case CMD_SHOW:
-          if (parse_show(STDIN_FILENO, &event_id) != 0) {
+          if (parse_show(fileDescriptor, &event_id) != 0) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");
             continue;
           }
@@ -138,7 +116,7 @@ int main(int argc, char *argv[]) {
           break;
 
         case CMD_WAIT:
-          if (parse_wait(STDIN_FILENO, &delay, NULL) == -1) {  // thread_id is not implemented
+          if (parse_wait(fileDescriptor, &delay, NULL) == -1) {  // thread_id is not implemented
             fprintf(stderr, "Invalid command. See HELP for usage\n");
             continue;
           }
