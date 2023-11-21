@@ -151,13 +151,12 @@ int main(int argc, char *argv[]) {
 
         case EOC:
           ems_terminate();
-          closedir(dir);
-          // add um break
-          return 0;
-        }
-     }
+          break;
+      }
     close(fileDescriptor);
     }
+    }
   }
+  closedir(dir);
   return 0;
 }
