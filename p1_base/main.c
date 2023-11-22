@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
 
       fileDescriptor = open(filePath, O_RDONLY); // Opens the file to read only mode
 
-      if (fileDescriptor == -1) {
+      if (fileDescriptor == -1) { // possivelmente trocar por menor que 0
         const char *errorMessage = "Error opening the file\n"; 
         write(2, errorMessage, strlen(errorMessage)); 
         write(2, strerror(errno), strlen(strerror(errno))); 
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
       unsigned int event_id, delay;
       size_t num_rows, num_columns, num_coords;
       size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
-
+      printf("> ");
       fflush(stdout);
 
       switch (get_next(fileDescriptor)) {
@@ -151,10 +151,11 @@ int main(int argc, char *argv[]) {
 
         case EOC:
           ems_terminate();
-          break;
+          closedir(dir);
+          return 0;
       }
-    close(fileDescriptor);
     }
+    close(fileDescriptor);
     }
   }
   closedir(dir);
