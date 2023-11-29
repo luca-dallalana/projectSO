@@ -16,12 +16,22 @@
 #define BUFFER_SIZE 1024
 
 int main(int argc, char *argv[]) {
+
   DIR *dir; // pointer for a directory struct 
+
   struct dirent *entry; // pointer for the entry of a directory 
+
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay that will not be negative
-  if (argc > 1) {
+
+  if(argc != 3){
+    fprintf(stderr, "Wrong number of arguments");
+    return 1;
+  }
+
+  
+
     char *endptr;
-    unsigned long int delay = strtoul(argv[1], &endptr, 10); // delay that will not be negative
+    unsigned long int delay = strtoul(argv[2], &endptr, 10); // delay that will not be negative
 
     if (*endptr != '\0' || delay > UINT_MAX) {
       fprintf(stderr, "Invalid delay value or value too large\n");
@@ -29,14 +39,17 @@ int main(int argc, char *argv[]) {
     }
 
     state_access_delay_ms = (unsigned int)delay;
-  }
+
+  
 
   if (ems_init(state_access_delay_ms)) {
+
     fprintf(stderr, "Failed to initialize EMS\n");
     return 1;
+
   }
 
-  dir = opendir(argv[2]); // opens the directory and stores the result in the variable
+  dir = opendir(argv[1]); // opens the directory and stores the result in the variable
 
   if (dir == NULL){
         const char *errorMessage = "Error opening the directory\n"; // my error message
@@ -47,20 +60,13 @@ int main(int argc, char *argv[]) {
   
   int fileDescriptor; // the result of a file operation
 
-  while ((entry = readdir(dir)) != NULL) { // while there are directories to be read
+  while ((entry = readdir(dir))) { // while there are directories to be read
     if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
       char filePath[MAX_PATH_SIZE]; // Max size for a path
       snprintf(filePath, MAX_PATH_SIZE, "%s/%s", argv[2], entry->d_name); // Concatenates the directory path wit the file name
 
       fileDescriptor = open(filePath, O_RDONLY); // Opens the file to read only mode
 
-      if (fileDescriptor == -1) { // possivelmente trocar por menor que 0
-        const char *errorMessage = "Error opening the file\n"; 
-        write(2, errorMessage, strlen(errorMessage)); 
-        write(2, strerror(errno), strlen(strerror(errno))); 
-        closedir(dir);
-        return 1;
-      }
 
     while (1) {
       unsigned int event_id, delay;

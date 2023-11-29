@@ -7,6 +7,11 @@
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
 
+
+void write_to_file(const char *message,const int output_fd){
+  write(output_fd,message,strlen(message));
+}
+
 /// Calculates a timespec from a delay in milliseconds.
 /// @param delay_ms Delay in milliseconds.
 /// @return Timespec with the given delay.
@@ -156,50 +161,60 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
-int ems_show(unsigned int event_id) {
+int ems_show(unsigned int event_id, const int output_fd) {
+
   if (event_list == NULL) {
-    fprintf(stderr, "EMS state must be initialized\n");
+    write_to_file("EMS state must be initialized\n",output_fd);
     return 1;
   }
 
   struct Event* event = get_event_with_delay(event_id);
 
   if (event == NULL) {
-    fprintf(stderr, "Event not found\n");
+    write_to_file("Event not found\n",output_fd); 
     return 1;
   }
 
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
-      printf("%u", *seat);
+
+      char seat_str[16];  
+
+      sprintf(seat_str, "%u", *seat);
+      write(output_fd, seat_str, strlen(seat_str));
 
       if (j < event->cols) {
-        printf(" ");
+        write(output_fd, " ", 1);
       }
     }
 
-    printf("\n");
+    write(output_fd, "\n", 1);
   }
 
   return 0;
 }
 
-int ems_list_events() {
+int ems_list_events(const int output_fd) {
   if (event_list == NULL) {
-    fprintf(stderr, "EMS state must be initialized\n");
+    write_to_file("EMS state must be initialized\n",output_fd);
     return 1;
   }
 
   if (event_list->head == NULL) {
-    printf("No events\n");
+    write_to_file("No events\n",output_fd);
+   
     return 0;
   }
 
   struct ListNode* current = event_list->head;
   while (current != NULL) {
-    printf("Event: ");
-    printf("%u\n", (current->event)->id);
+    write_to_file("Event: ",output_fd);
+    char id[16];  
+
+    sprintf(id,"%u\n",(current->event)->id);
+    write(output_fd,id,strlen(id));
+  
     current = current->next;
   }
 
