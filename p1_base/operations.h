@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+void write_to_file(const char *message,const int output_fd);
+
+char* parse_file_name( char *fileName);
+
 /// Initializes the EMS state.
 /// @param delay_ms State access delay in milliseconds.
 /// @return 0 if the EMS state was initialized successfully, 1 otherwise.
@@ -29,11 +33,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys)
 /// Prints the given event.
 /// @param event_id Id of the event to print.
 /// @return 0 if the event was printed successfully, 1 otherwise.
-int ems_show(unsigned int event_id);
+int ems_show(unsigned int event_id, const int fd_outupt);
 
 /// Prints all the events.
 /// @return 0 if the events were printed successfully, 1 otherwise.
-int ems_list_events();
+int ems_list_events(const int fd_output);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "eventlist.h"
 
@@ -10,6 +12,10 @@ static unsigned int state_access_delay_ms = 0;
 
 void write_to_file(const char *message,const int output_fd){
   write(output_fd,message,strlen(message));
+}
+
+char* parse_file_name(char *fileName) {
+  return strtok(fileName,".");
 }
 
 /// Calculates a timespec from a delay in milliseconds.
@@ -182,14 +188,15 @@ int ems_show(unsigned int event_id, const int output_fd) {
       char seat_str[16];  
 
       sprintf(seat_str, "%u", *seat);
-      write(output_fd, seat_str, strlen(seat_str));
+      write_to_file(seat_str,output_fd);
 
       if (j < event->cols) {
-        write(output_fd, " ", 1);
+        write_to_file(" ",output_fd);
+  
       }
     }
+    write_to_file("\n",output_fd);
 
-    write(output_fd, "\n", 1);
   }
 
   return 0;
@@ -213,7 +220,7 @@ int ems_list_events(const int output_fd) {
     char id[16];  
 
     sprintf(id,"%u\n",(current->event)->id);
-    write(output_fd,id,strlen(id));
+    write_to_file(id,output_fd);
   
     current = current->next;
   }

@@ -15,59 +15,10 @@
 #define MAX_PATH_SIZE 256 + 2
 #define BUFFER_SIZE 1024
 
-int main(int argc, char *argv[]) {
-
-  DIR *dir; // pointer for a directory struct 
-
-  struct dirent *entry; // pointer for the entry of a directory 
-
-  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay that will not be negative
-
-  if(argc != 3){
-    fprintf(stderr, "Wrong number of arguments");
-    return 1;
-  }
-
-  
-
-    char *endptr;
-    unsigned long int delay = strtoul(argv[2], &endptr, 10); // delay that will not be negative
-
-    if (*endptr != '\0' || delay > UINT_MAX) {
-      fprintf(stderr, "Invalid delay value or value too large\n");
-      return 1;
-    }
-
-    state_access_delay_ms = (unsigned int)delay;
-
-  
-
-  if (ems_init(state_access_delay_ms)) {
-
-    fprintf(stderr, "Failed to initialize EMS\n");
-    return 1;
-
-  }
-
-  dir = opendir(argv[1]); // opens the directory and stores the result in the variable
-
-  if (dir == NULL){
-        const char *errorMessage = "Error opening the directory\n"; // my error message
-        write(2, errorMessage, strlen(errorMessage)); // 2 to write in the error output, the message and its size
-        write(2, strerror(errno), strlen(strerror(errno))); // system error message
-        return 1;
-    }
-  
-  int fileDescriptor; // the result of a file operation
-
-  while ((entry = readdir(dir))) { // while there are directories to be read
-    if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
-      char filePath[MAX_PATH_SIZE]; // Max size for a path
-      snprintf(filePath, MAX_PATH_SIZE, "%s/%s", argv[2], entry->d_name); // Concatenates the directory path wit the file name
-
-      fileDescriptor = open(filePath, O_RDONLY); // Opens the file to read only mode
 
 
+void serve_file(const int fd_input, const int fd_output){
+    
     while (1) {
       unsigned int event_id, delay;
       size_t num_rows, num_columns, num_coords;
@@ -75,55 +26,58 @@ int main(int argc, char *argv[]) {
       printf("> ");
       fflush(stdout);
 
-      switch (get_next(fileDescriptor)) {
+      switch (get_next(fd_input)) {
         case CMD_CREATE:
-          if (parse_create(fileDescriptor, &event_id, &num_rows, &num_columns) != 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+          if (parse_create(fd_input, &event_id, &num_rows, &num_columns) != 0) {
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             continue;
           }
 
           if (ems_create(event_id, num_rows, num_columns)) {
-            fprintf(stderr, "Failed to create event\n");
+            write_to_file("Failed to create event\n",STDERR_FILENO);
           }
 
           break;
 
         case CMD_RESERVE:
-          num_coords = parse_reserve(fileDescriptor, MAX_RESERVATION_SIZE, &event_id, xs, ys);
+          num_coords = parse_reserve(fd_input, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
           if (num_coords == 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             continue;
           }
 
           if (ems_reserve(event_id, num_coords, xs, ys)) {
-            fprintf(stderr, "Failed to reserve seats\n");
+            write_to_file("Failed to reserve seats\n",STDERR_FILENO);
+    
           }
 
           break;
 
         case CMD_SHOW:
-          if (parse_show(fileDescriptor, &event_id) != 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+          if (parse_show(fd_input, &event_id) != 0) {
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             continue;
           }
 
-          if (ems_show(event_id)) {
-            fprintf(stderr, "Failed to show event\n");
+          if (ems_show(event_id, fd_output)) {
+            write_to_file("Failed to show event\n",STDERR_FILENO);
           }
+          ems_show(event_id, fd_output);
 
           break;
 
         case CMD_LIST_EVENTS:
-          if (ems_list_events()) {
-            fprintf(stderr, "Failed to list events\n");
+          if (ems_list_events(fd_output)) {
+            write_to_file("Failed to list events\n",STDERR_FILENO);
+    
           }
-
+          ems_list_events(fd_output);
           break;
 
         case CMD_WAIT:
-          if (parse_wait(fileDescriptor, &delay, NULL) == -1) {  // thread_id is not implemented
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+          if (parse_wait(fd_input, &delay, NULL) == -1) {  // thread_id is not implemented
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             continue;
           }
 
@@ -135,7 +89,7 @@ int main(int argc, char *argv[]) {
           break;
 
         case CMD_INVALID:
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
           break;
 
         case CMD_HELP:
@@ -157,13 +111,96 @@ int main(int argc, char *argv[]) {
 
         case EOC:
           ems_terminate();
-          closedir(dir);
           return 0;
       }
+}
+}
+
+int main(int argc, char *argv[]) {
+
+  DIR *dir; // pointer for a directory struct 
+
+  struct dirent *entry; // pointer for the entry of a directory 
+
+  unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS; // delay that will not be negative
+
+  if(argc != 3){
+    write_to_file("Wrong number of arguments\n",STDERR_FILENO);
+    return 1;
+  }
+
+  
+
+    char *endptr;
+    unsigned long int delay = strtoul(argv[2], &endptr, 10); // delay that will not be negative
+
+    if (*endptr != '\0' || delay > UINT_MAX) {
+        write_to_file("Invalid delay value or value too large\n",STDERR_FILENO);
+      
+        return 1;
     }
-    close(fileDescriptor);
+
+    state_access_delay_ms = (unsigned int)delay;
+
+  
+
+  if (ems_init(state_access_delay_ms)) {
+    write_to_file("Failed to initialize EMS\n",STDERR_FILENO);
+    return 1;
+
+  }
+
+  dir = opendir(argv[1]); // opens the directory and stores the result in the variable
+
+  if (dir == NULL){
+        write_to_file("Error opening the directory\n",STDERR_FILENO);
+        return 1;
+    }
+  
+  int fd_input; // the result of a file operation
+  char buffer[BUFFER_SIZE];
+
+  while ((entry = readdir(dir))) { // while there are directories to be read
+    if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
+
+        const char *fileName;
+        fileName = parse_file_name(entry->d_name);
+
+        char inputFilePath[MAX_PATH_SIZE]; // Max size for a path
+        snprintf(inputFilePath, MAX_PATH_SIZE, "%s/%s", argv[2], fileName); // Concatenates the directory path with the file name
+
+        fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
+
+        if(fd_input < 0){
+            write_to_file("Error opening the file\n",STDERR_FILENO);
+            return 1;
+        }
+        
+
+        char outputFilePath[MAX_PATH_SIZE];
+        snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[2], fileName);
+
+        int fd_output = open(outputFilePath, O_WRONLY);
+
+        if(fd_output < 0){
+            write_to_file("Error opening the file\n",STDERR_FILENO);
+            continue;
+        }
+
+        ssize_t bytesRead;
+
+        while ((bytesRead = read(fd_input, buffer, sizeof(buffer))) > 0){
+           serve_file(fd_input,fd_output);
+        }
+
+        close(fd_input);
+        close(fd_output);
+
     }
   }
   closedir(dir);
   return 0;
 }
+
+
+
