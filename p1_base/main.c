@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
   
   if(argc != 4){
     write_to_file("Wrong number of arguments\n",STDERR_FILENO);
-    return 1;
+    exit(1);
   }
 
    
@@ -143,8 +143,7 @@ int main(int argc, char *argv[]) {
 
   if ( delay > UINT_MAX) {
       write_to_file("Invalid delay value or value too large\n",STDERR_FILENO);
-    
-      return 1;
+      exit(1);
   }
 
    ems_init(delay);
@@ -153,17 +152,17 @@ int main(int argc, char *argv[]) {
   
   if (dir == NULL){
         write_to_file("Error opening the directory\n",STDERR_FILENO);
-        return 1;
+        exit(1);
   }
   
-  int fd_input; // the result of a file operation
+  int fd_input; 
   int fd_output;
 
-  int max_proc, n_proc = 0, status;
+  int max_proc,status ,n_proc = 0;
   sscanf(argv[3],"%i",&max_proc);
-  pid_t pid[max_proc];
 
   while ((entry = readdir(dir))) { // while there are directories to be read
+    int pid[max_proc];
 
     if(strcmp(entry->d_name,"..") == 0 || strcmp(entry->d_name,".") == 0 ){
       continue;
@@ -178,9 +177,11 @@ int main(int argc, char *argv[]) {
         int cur_pid;
         cur_pid = fork();
 
+        n_proc++;
+        
         if(cur_pid == 0){
-
-            pid[n_proc] = cur_pid;
+          
+            pid[n_proc -1] = cur_pid;
 
             char *fileName;
             fileName = parse_file_name(entry->d_name);
@@ -193,7 +194,7 @@ int main(int argc, char *argv[]) {
             if(fd_input < 0){
                 
                 write_to_file("Error opening inputfile\n",STDERR_FILENO);
-                return 1;
+                exit(1);
             }
             
         
@@ -205,32 +206,31 @@ int main(int argc, char *argv[]) {
             
             if(fd_output < 0){
                 write_to_file("Error opening output file \n",STDERR_FILENO);
-                return 1;
+                exit(1);
             }
 
             serve_file(fd_input,fd_output,delay);
 
-      
             exit(n_proc);
-
         }
-        n_proc++;
-            
-      }
-  }
- 
-  for(int i = 0; i < n_proc; i++){
-      waitpid(pid[i],&status,0);
-      if (WIFEXITED(status)){
-          fprintf(stdout,"Child %d terminated with status: %d\n",
-          i + 1, WEXITSTATUS(status));
-      }
+        else if(cur_pid < 0){
+          exit(1);
+        }
+        
+    }
 
+    for(int i = 0; i < n_proc; i++){
+    
+      pid_t cpid = waitpid(pid[i],&status,0);
+      if (cpid != -1 && WIFEXITED(status)){
+          fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+      }
+    }
   }
-
+  
   closedir(dir);
   ems_terminate();
-  return 0;
+  exit(EXIT_SUCCESS);
 }
 
 
