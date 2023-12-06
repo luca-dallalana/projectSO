@@ -160,9 +160,13 @@ int main(int argc, char *argv[]) {
 
   int max_proc,status ,n_proc = 0;
   sscanf(argv[3],"%i",&max_proc);
+  int pid[max_proc];
 
+  for(int i = 0; i < max_proc ; i++){
+    pid[i] = 0;
+  }
   while ((entry = readdir(dir))) { // while there are directories to be read
-    int pid[max_proc];
+
 
     if(strcmp(entry->d_name,"..") == 0 || strcmp(entry->d_name,".") == 0 ){
       continue;
@@ -173,61 +177,83 @@ int main(int argc, char *argv[]) {
     }
 
     if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
+        if(n_proc == max_proc){
+          for(int i = 0; i < n_proc; i++){
+
+              pid_t cpid = waitpid(pid[i],&status,0);
+              if (cpid != -1 && WIFEXITED(status)){
+                  pid[i] = 0;
+                  n_proc--;
+                  fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+                  break;                  
+              }
+          
+          }       
+        }
 
         int cur_pid;
         cur_pid = fork();
-
         n_proc++;
+
         
         if(cur_pid == 0){
+          for(int i = 0; i < max_proc; i++){
+
+            if(pid[i] == 0){
+              pid[i] = getpid();
+              break;
+            }
+
+          }
+
+          char *fileName;
+          fileName = parse_file_name(entry->d_name);
+
+          char inputFilePath[MAX_PATH_SIZE]; // Max size for a path
+          snprintf(inputFilePath, MAX_PATH_SIZE, "%s/%s.jobs", argv[1], fileName); // Concatenates the directory path with the file name
+
+          fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
+      
+          if(fd_input < 0){
+              
+              write_to_file("Error opening inputfile\n",STDERR_FILENO);
+              exit(1);
+          }
           
-            pid[n_proc -1] = cur_pid;
+      
+          char outputFilePath[MAX_PATH_SIZE];
+          snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[1], fileName);
+      
+          
+          fd_output = open(outputFilePath,O_WRONLY | O_CREAT | O_TRUNC);
+          
+          if(fd_output < 0){
+              write_to_file("Error opening output file \n",STDERR_FILENO);
+              exit(1);
+          }
 
-            char *fileName;
-            fileName = parse_file_name(entry->d_name);
-
-            char inputFilePath[MAX_PATH_SIZE]; // Max size for a path
-            snprintf(inputFilePath, MAX_PATH_SIZE, "%s/%s.jobs", argv[1], fileName); // Concatenates the directory path with the file name
-
-            fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
-        
-            if(fd_input < 0){
-                
-                write_to_file("Error opening inputfile\n",STDERR_FILENO);
-                exit(1);
-            }
-            
-        
-            char outputFilePath[MAX_PATH_SIZE];
-            snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[1], fileName);
-        
-            
-            fd_output = open(outputFilePath,O_WRONLY | O_CREAT);
-            
-            if(fd_output < 0){
-                write_to_file("Error opening output file \n",STDERR_FILENO);
-                exit(1);
-            }
-
-            serve_file(fd_input,fd_output,delay);
-
-            exit(n_proc);
+          serve_file(fd_input,fd_output,delay);
+          exit(n_proc);
         }
+
         else if(cur_pid < 0){
           exit(1);
         }
+
+        
         
     }
+    for(int i = 0; i < max_proc; i++){
 
-    for(int i = 0; i < n_proc; i++){
-    
       pid_t cpid = waitpid(pid[i],&status,0);
       if (cpid != -1 && WIFEXITED(status)){
           fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+
       }
-    }
-  }
   
+    }
+
+  }
   closedir(dir);
   ems_terminate();
   exit(EXIT_SUCCESS);
