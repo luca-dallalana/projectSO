@@ -161,42 +161,54 @@ int main(int argc, char *argv[]) {
   int max_proc,status ,n_proc = 0;
   sscanf(argv[3],"%i",&max_proc);
   int pid[max_proc];
-
+  
+  // initializes the array that will contain the pid of the child processes
   for(int i = 0; i < max_proc ; i++){
     pid[i] = 0;
   }
+
   while ((entry = readdir(dir))) { // while there are directories to be read
 
-
+    // skips "invisible" files
     if(strcmp(entry->d_name,"..") == 0 || strcmp(entry->d_name,".") == 0 ){
       continue;
     }
 
+    // skips .out files
     if (strstr(entry->d_name, ".out") != NULL){
       continue;
     }
 
+
     if (strstr(entry->d_name, ".jobs") != NULL) { // If the directory is regular and it contains .jobs files
+
+        // if the number of parallel processes reaches max it waits until one of the existing processes exits to create another    
         if(n_proc == max_proc){
+            
           for(int i = 0; i < n_proc; i++){
 
-              pid_t cpid = waitpid(pid[i],&status,0);
-              if (cpid != -1 && WIFEXITED(status)){
-                  pid[i] = 0;
-                  n_proc--;
-                  fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
-                  break;                  
-              }
+            pid_t cpid = waitpid(pid[i],&status,0);
+            
+            if (cpid != -1 && WIFEXITED(status)){
+                // removes the process from the array of pid
+                pid[i] = 0;
+                n_proc--;
+                fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+                break;                  
+            }
           
           }       
         }
 
         int cur_pid;
+
+        // creates a new process
         cur_pid = fork();
         n_proc++;
 
-        
+        // child process code
         if(cur_pid == 0){
+          // looks for an empty space in the array of pid to add the new process
           for(int i = 0; i < max_proc; i++){
 
             if(pid[i] == 0){
@@ -222,30 +234,34 @@ int main(int argc, char *argv[]) {
           
       
           char outputFilePath[MAX_PATH_SIZE];
-          snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[1], fileName);
-      
+          snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[1], fileName); 
           
-          fd_output = open(outputFilePath,O_WRONLY | O_CREAT | O_TRUNC);
+          // opens the file and erases its content if it already exists, creates a new one if it doesn't
+          fd_output = open(outputFilePath,O_WRONLY | O_CREAT | O_TRUNC);  
           
           if(fd_output < 0){
               write_to_file("Error opening output file \n",STDERR_FILENO);
               exit(1);
           }
-
+          
+          // if nothing failed it analises the input file and writes to the .out file its content
           serve_file(fd_input,fd_output,delay);
+
+          // terminates the process
           exit(n_proc);
         }
 
         else if(cur_pid < 0){
           exit(1);
-        }
-
-        
+        }        
         
     }
+
+    // parent process waits for all the child processes
     for(int i = 0; i < max_proc; i++){
 
       pid_t cpid = waitpid(pid[i],&status,0);
+
       if (cpid != -1 && WIFEXITED(status)){
           fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
 
