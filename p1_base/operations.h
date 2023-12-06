@@ -4,7 +4,7 @@
 
 #include <stddef.h>
 
-void serve_file(int fd_input, int fd_output, unsigned int delay);
+void compute_file(int fd_input, int fd_output, unsigned int delay);
 
 void write_to_file(const char *message,const int output_fd);
 
