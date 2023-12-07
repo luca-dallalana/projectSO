@@ -146,7 +146,6 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
   }
 
-   ems_init(delay);
 
   dir = opendir(argv[1]); // opens the directory and stores the result in the variable
   
@@ -160,7 +159,7 @@ int main(int argc, char *argv[]) {
 
   int max_proc,status ,n_proc = 0;
   sscanf(argv[3],"%i",&max_proc);
-  int pid[max_proc];
+  pid_t pid[max_proc];
   
   // initializes the array that will contain the pid of the child processes
   for(int i = 0; i < max_proc ; i++){
@@ -208,6 +207,8 @@ int main(int argc, char *argv[]) {
 
         // child process code
         if(cur_pid == 0){
+          ems_init(delay);
+
           // looks for an empty space in the array of pid to add the new process
           for(int i = 0; i < max_proc; i++){
 

@@ -40,7 +40,7 @@ int ems_show(unsigned int event_id, const int fd_outupt);
 
 /// Prints all the events.
 /// @return 0 if the events were printed successfully, 1 otherwise.
-int ems_list_events(const int fd_output);
+int ems_list_events(const int output_fd);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
