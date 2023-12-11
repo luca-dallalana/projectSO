@@ -17,7 +17,7 @@
 #define BUFFER_SIZE 1024
 
 
-void serve_file(int fd_input, int fd_output, unsigned int delay){
+void compute_file(int fd_input, int fd_output, unsigned int delay){
     while (1) {
           unsigned int event_id;
           size_t num_rows, num_columns, num_coords;
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
   
   if(argc != 4){
     write_to_file("Wrong number of arguments\n",STDERR_FILENO);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
    
@@ -143,16 +143,15 @@ int main(int argc, char *argv[]) {
 
   if ( delay > UINT_MAX) {
       write_to_file("Invalid delay value or value too large\n",STDERR_FILENO);
-      exit(1);
+      exit(EXIT_FAILURE);
   }
 
-   ems_init(delay);
 
   dir = opendir(argv[1]); // opens the directory and stores the result in the variable
   
   if (dir == NULL){
         write_to_file("Error opening the directory\n",STDERR_FILENO);
-        exit(1);
+        exit(EXIT_FAILURE);
   }
   
   int fd_input; 
@@ -160,7 +159,7 @@ int main(int argc, char *argv[]) {
 
   int max_proc,status ,n_proc = 0;
   sscanf(argv[3],"%i",&max_proc);
-  int pid[max_proc];
+  pid_t pid[max_proc];
   
   // initializes the array that will contain the pid of the child processes
   for(int i = 0; i < max_proc ; i++){
@@ -193,7 +192,7 @@ int main(int argc, char *argv[]) {
                 // removes the process from the array of pid
                 pid[i] = 0;
                 n_proc--;
-                fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+                printf("Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
                 break;                  
             }
           
@@ -208,6 +207,8 @@ int main(int argc, char *argv[]) {
 
         // child process code
         if(cur_pid == 0){
+          ems_init(delay);
+
           // looks for an empty space in the array of pid to add the new process
           for(int i = 0; i < max_proc; i++){
 
@@ -229,7 +230,7 @@ int main(int argc, char *argv[]) {
           if(fd_input < 0){
               
               write_to_file("Error opening inputfile\n",STDERR_FILENO);
-              exit(1);
+              exit(EXIT_FAILURE);
           }
           
       
@@ -241,18 +242,18 @@ int main(int argc, char *argv[]) {
           
           if(fd_output < 0){
               write_to_file("Error opening output file \n",STDERR_FILENO);
-              exit(1);
+              exit(EXIT_FAILURE);
           }
           
           // if nothing failed it analises the input file and writes to the .out file its content
-          serve_file(fd_input,fd_output,delay);
+          compute_file(fd_input,fd_output,delay);
 
           // terminates the process
-          exit(n_proc);
+          exit(EXIT_SUCCESS);
         }
 
         else if(cur_pid < 0){
-          exit(1);
+          exit(EXIT_FAILURE);
         }        
         
     }
@@ -263,7 +264,7 @@ int main(int argc, char *argv[]) {
       pid_t cpid = waitpid(pid[i],&status,0);
 
       if (cpid != -1 && WIFEXITED(status)){
-          fprintf(stdout,"Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
+          printf("Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
 
       }
   
