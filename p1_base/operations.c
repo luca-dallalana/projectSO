@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
+
 #include "eventlist.h"
 #include "constants.h"
 #include "parser.h"
@@ -12,6 +13,11 @@
 
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
+int eoc = 0;
+
+pthread_mutex_t mutex ;
+pthread_rwlock_t lock_rw ;
+
 
 
 void write_to_file(const char *message,const int output_fd){
@@ -127,6 +133,9 @@ int ems_create(struct CreateArgs* args) {
 }
 
 int ems_reserve(struct ReserveArgs* args) {
+
+  pthread_rwlock_wrlock(&lock_rw);
+
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
@@ -138,6 +147,7 @@ int ems_reserve(struct ReserveArgs* args) {
     fprintf(stderr, "Event not found\n");
     return 1;
   }
+
 
   unsigned int reservation_id = ++event->reservations;
 
@@ -153,10 +163,12 @@ int ems_reserve(struct ReserveArgs* args) {
 
     if (*get_seat_with_delay(event, seat_index(event, row, col)) != 0) {
       fprintf(stderr, "Seat already reserved\n");
+          
       break;
     }
 
     *get_seat_with_delay(event, seat_index(event, row, col)) = reservation_id;
+
   }
 
   // If the reservation was not successful, free the seats that were reserved.
@@ -168,10 +180,13 @@ int ems_reserve(struct ReserveArgs* args) {
     return 1;
   }
 
+  pthread_rwlock_unlock(&lock_rw);
   return 0;
 }
 
 int ems_show(struct ShowArgs* args) {
+
+  pthread_rwlock_rdlock(&lock_rw);
 
   if (event_list == NULL) {
     write_to_file("EMS state must be initialized\n",args -> output_fd);
@@ -202,11 +217,14 @@ int ems_show(struct ShowArgs* args) {
     write_to_file("\n",args -> output_fd);
 
   }
-
+  pthread_rwlock_unlock(&lock_rw);
   return 0;
 }
 
 int ems_list_events(const int output_fd) {
+
+  pthread_rwlock_rdlock(&lock_rw);
+
   if (event_list == NULL) {
     write_to_file("EMS state must be initialized\n",output_fd);
     return 1;
@@ -229,6 +247,7 @@ int ems_list_events(const int output_fd) {
     current = current->next;
   }
 
+  pthread_rwlock_unlock(&lock_rw);
   return 0;
 }
 
@@ -238,11 +257,11 @@ void ems_wait(unsigned int delay_ms) {
 }
 
 
-void add_tid(pthread_t t_id[], pthread_t id, int max_thread){
+int add_tid(pthread_t t_id[], pthread_t id, int max_thread){
   for(int i = 0; i < max_thread; i++){
-      if(t_id[i] != 0){
+      if(t_id[i] == 0){
         t_id[i] = id;
-        break;
+        return i;
       }
     }
 }
@@ -259,11 +278,10 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
     }
 
     while (1) {
-          unsigned int event_id;
+          unsigned int event_id, index;
           size_t num_rows, num_columns, num_coords;
           size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
          
-          int eoc = 0;
 
           switch (get_next(fd_input)) {
             
@@ -284,11 +302,10 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
                 write_to_file("Failed to create event\n",STDERR_FILENO);
               }
               
-              add_tid(t_id,id,max_thread);
+              index = add_tid(t_id,id,max_thread);
 
-              // future locks ?
-        
-              
+              pthread_exit(EXIT_SUCCESS);
+                  
               break;
 
             case CMD_RESERVE:
@@ -311,11 +328,9 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
                 write_to_file("Failed to reserve seats\n",STDERR_FILENO);
               }
 
-              add_tid(t_id,id,max_thread);
-              
-              // future locks?
-                 
+              index = add_tid(t_id,id,max_thread);
 
+              pthread_exit(EXIT_SUCCESS);
               break;
 
             case CMD_SHOW:
@@ -332,11 +347,10 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
               
               }
               
-              add_tid(t_id,id,max_thread);
+              index = add_tid(t_id,id,max_thread);
 
-              // future locks ?
-              
-            
+     
+          
               break;
 
             case CMD_LIST_EVENTS:
@@ -344,7 +358,7 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
                 write_to_file("Failed to list events\n",STDERR_FILENO);
         
               }
-              // future locks? 
+ 
               break;
 
             case CMD_WAIT:
