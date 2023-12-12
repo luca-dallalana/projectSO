@@ -7,6 +7,7 @@
 #include <string.h>
 #include <dirent.h>
 #include<sys/wait.h>
+#include <pthread.h>
   
 #include "constants.h"
 #include "operations.h"
@@ -33,14 +34,19 @@ int main(int argc, char *argv[]) {
 
    
   unsigned int delay; 
-  sscanf(argv[2],"%u",&delay);
 
-  if ( delay > UINT_MAX) {
+  if(argv[4] != NULL){
+    sscanf(argv[4],"%u",&delay);
+  }
+  else{
+    delay = STATE_ACCESS_DELAY_MS;
+  }
+
+  if (delay > UINT_MAX) {
       write_to_file("Invalid delay value or value too large\n",STDERR_FILENO);
       exit(EXIT_FAILURE);
   }
   
-  ems_init(delay);
 
 
   dir = opendir(argv[1]); // opens the directory and stores the result in the variable
@@ -53,11 +59,17 @@ int main(int argc, char *argv[]) {
   int fd_input; 
   int fd_output;
 
-  int max_proc,status ,n_proc = 0;
-  sscanf(argv[3],"%i",&max_proc);
+  ems_init(delay);
+
+  int max_proc,max_thread,status ,n_proc = 0;
+  sscanf(argv[2],"%i",&max_proc);
+  
+  sscanf(argv[3],"%i",&max_thread);
+
+  // array that will contain the pid of the child processes
   pid_t pid[max_proc];
   
-  // initializes the array that will contain the pid of the child processes
+  // initializes the array 
   for(int i = 0; i < max_proc ; i++){
     pid[i] = 0;
   }
@@ -108,6 +120,7 @@ int main(int argc, char *argv[]) {
 
           // child process code
           if(cur_pid == 0){
+            
 
             // looks for an empty space in the array of pid to add the new process
             for(int i = 0; i < max_proc; i++){
@@ -118,6 +131,8 @@ int main(int argc, char *argv[]) {
               }
 
             }
+
+            
 
             char *fileName;
             fileName = parse_file_name(entry->d_name);
@@ -146,7 +161,7 @@ int main(int argc, char *argv[]) {
             }
             
             // if nothing failed it analises the input file and writes to the .out file its content
-            compute_file(fd_input,fd_output,delay,0);
+            compute_file(fd_input,fd_output,delay,max_thread);
 
             // terminates the process
             exit(EXIT_SUCCESS);

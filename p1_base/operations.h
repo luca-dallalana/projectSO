@@ -4,7 +4,27 @@
 
 #include <stddef.h>
 
-void compute_file(int fd_input, int fd_output, unsigned int delay);
+
+
+struct CreateArgs{
+    unsigned int event_id;
+    size_t num_rows;
+    size_t num_cols;
+}
+
+struct ReserveArgs{
+    unsigned int event_id;
+    size_t num_seats;
+    size_t* xs;
+    size_t* ys;
+}
+
+struct ShowArgs{
+    unsigned int event_id;
+    const int output_fd;
+}
+
+void compute_file(int fd_input, int fd_output, unsigned int delay, int max_thread);
 
 void write_to_file(const char *message,const int output_fd);
 
