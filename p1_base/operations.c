@@ -14,9 +14,7 @@
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
 int eoc = 0;
-
-pthread_mutex_t mutex ;
-pthread_rwlock_t lock_rw ;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; 
 
 
 
@@ -88,73 +86,81 @@ int ems_terminate() {
   return 0;
 }
 
-int ems_create(struct CreateArgs* args) {
+void* ems_create(void* args) {
+
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
+  
+  struct CreateArgs* create_args = (struct CreateArgs*)args;
 
-  if (get_event_with_delay(args -> event_id) != NULL) {
+  if (get_event_with_delay(create_args -> event_id) != NULL) {
     fprintf(stderr, "Event already exists\n");
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
-
   struct Event* event = malloc(sizeof(struct Event));
 
   if (event == NULL) {
     fprintf(stderr, "Error allocating memory for event\n");
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
-  event->id = args -> event_id;
-  event->rows = args -> num_rows;
-  event->cols = args -> num_cols;
-  event->reservations = 0;
-  event->data = malloc(args -> num_rows * args -> num_cols * sizeof(unsigned int));
 
+  pthread_rwlock_init(&event->lock_rw, NULL);
+
+  pthread_rwlock_wrlock(&event -> lock_rw);
+  event->id = create_args -> event_id;
+  event->rows = create_args -> num_rows;
+  event->cols = create_args -> num_cols;
+  event->reservations = 0;
+
+  event->data = malloc(create_args -> num_rows * create_args -> num_cols * sizeof(unsigned int));
+ 
   if (event->data == NULL) {
     fprintf(stderr, "Error allocating memory for event data\n");
     free(event);
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
-  for (size_t i = 0; i < args -> num_rows * args -> num_cols; i++) {
+  for (size_t i = 0; i < event -> rows * event -> cols; i++) {
     event->data[i] = 0;
   }
-
   if (append_to_list(event_list, event) != 0) {
     fprintf(stderr, "Error appending event to list\n");
     free(event->data);
     free(event);
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
+  pthread_rwlock_unlock(&event -> lock_rw);
+  pthread_exit((void*)EXIT_SUCCESS); 
 
-  return 0;
 }
 
-int ems_reserve(struct ReserveArgs* args) {
+void* ems_reserve(void* args) {
 
-  pthread_rwlock_wrlock(&lock_rw);
 
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
-  struct Event* event = get_event_with_delay(args -> event_id);
-
+  struct ReserveArgs* reserve_args = (struct ReserveArgs*)args;
+  struct Event* event = get_event_with_delay(reserve_args ->event_id);
+  
   if (event == NULL) {
-    fprintf(stderr, "Event not found\n");
-    return 1;
+    write_to_file("Event not found\n",STDERR_FILENO);
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
+  pthread_rwlock_wrlock(&event -> lock_rw);
 
   unsigned int reservation_id = ++event->reservations;
 
   size_t i = 0;
-  for (; i < args -> num_seats; i++) {
-    size_t row = args -> xs[i];
-    size_t col = args -> ys[i];
+  for (; i < reserve_args -> num_seats; i++) {
+    size_t row = reserve_args -> xs[i];
+    size_t col = reserve_args -> ys[i];
 
     if (row <= 0 || row > event->rows || col <= 0 || col > event->cols) {
       fprintf(stderr, "Invalid seat\n");
@@ -172,33 +178,35 @@ int ems_reserve(struct ReserveArgs* args) {
   }
 
   // If the reservation was not successful, free the seats that were reserved.
-  if (i < args -> num_seats) {
+  if (i < reserve_args -> num_seats) {
     event->reservations--;
     for (size_t j = 0; j < i; j++) {
-      *get_seat_with_delay(event, seat_index(event, args -> xs[j], args -> ys[j])) = 0;
+      *get_seat_with_delay(event, seat_index(event, reserve_args -> xs[j], reserve_args -> ys[j])) = 0;
     }
-    return 1;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
-  pthread_rwlock_unlock(&lock_rw);
-  return 0;
+  pthread_rwlock_unlock(&event -> lock_rw);
+  pthread_exit((void*)EXIT_SUCCESS); 
+
 }
 
-int ems_show(struct ShowArgs* args) {
+void* ems_show(void* args) {
 
-  pthread_rwlock_rdlock(&lock_rw);
-
+  struct ShowArgs* show_args = (struct ShowArgs*)args;
+  
   if (event_list == NULL) {
-    write_to_file("EMS state must be initialized\n",args -> output_fd);
-    return 1;
+    write_to_file("EMS state must be initialized\n",show_args -> output_fd);
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
-  struct Event* event = get_event_with_delay(args -> event_id);
+  struct Event* event = get_event_with_delay(show_args -> event_id);
 
   if (event == NULL) {
-    write_to_file("Event not found\n",args -> output_fd); 
-    return 1;
+    write_to_file("Event not found\n",STDERR_FILENO); 
+    pthread_exit((void*)EXIT_FAILURE); 
   }
+  pthread_rwlock_rdlock(&event -> lock_rw);
 
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
@@ -207,64 +215,67 @@ int ems_show(struct ShowArgs* args) {
       char seat_str[16];  
 
       sprintf(seat_str, "%u", *seat);
-      write_to_file(seat_str,args -> output_fd);
+      write_to_file(seat_str,show_args -> output_fd);
 
       if (j < event->cols) {
-        write_to_file(" ",args -> output_fd);
+        write_to_file(" ",show_args -> output_fd);
   
       }
     }
-    write_to_file("\n",args -> output_fd);
+    write_to_file("\n",show_args -> output_fd);
 
   }
-  pthread_rwlock_unlock(&lock_rw);
-  return 0;
+  pthread_rwlock_unlock(&event -> lock_rw);
+  pthread_exit((void*)EXIT_SUCCESS); 
+
 }
 
-int ems_list_events(const int output_fd) {
-
-  pthread_rwlock_rdlock(&lock_rw);
+void* ems_list_events(void* output_fd) {
 
   if (event_list == NULL) {
-    write_to_file("EMS state must be initialized\n",output_fd);
-    return 1;
+    write_to_file("EMS state must be initialized\n",*(const int*)output_fd);
+    pthread_exit((void*)EXIT_FAILURE); 
   }
 
   if (event_list->head == NULL) {
-    write_to_file("No events\n",output_fd);
+    write_to_file("No events\n",*(const int*)output_fd);
    
-    return 0;
+    pthread_exit((void*)EXIT_FAILURE); 
   }
-
+  
   struct ListNode* current = event_list->head;
   while (current != NULL) {
-    write_to_file("Event: ",output_fd);
+    pthread_rwlock_rdlock(&current ->event -> lock_rw);
+    write_to_file("Event: ",*(const int*)output_fd);
     char id[16];  
 
     sprintf(id,"%u\n",(current->event)->id);
-    write_to_file(id,output_fd);
-  
+    write_to_file(id,*(const int*)output_fd);
+   
+    pthread_rwlock_unlock(&current ->event -> lock_rw);
+
     current = current->next;
   }
+  pthread_exit((void*)EXIT_SUCCESS); 
 
-  pthread_rwlock_unlock(&lock_rw);
-  return 0;
 }
 
-void ems_wait(unsigned int delay_ms) {
-  struct timespec delay = delay_to_timespec(delay_ms);
+void* ems_wait(void* delay_ms) {
+  struct timespec delay = delay_to_timespec(*(unsigned int*)delay_ms);
   nanosleep(&delay, NULL);
+  pthread_exit((void*)EXIT_SUCCESS); 
 }
 
 
-int add_tid(pthread_t t_id[], pthread_t id, int max_thread){
+void add_tid(pthread_t t_id[], pthread_t id, int max_thread){
   for(int i = 0; i < max_thread; i++){
       if(t_id[i] == 0){
         t_id[i] = id;
-        return i;
+        break;
       }
     }
 }
+
 
 
 void compute_file(int fd_input, int fd_output, unsigned int delay, int max_thread){
@@ -273,19 +284,34 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
     pthread_t t_id[max_thread];
     
     // initializes the array
+
     for(int i = 0; i < max_thread; i++){
       t_id[i] = 0;
     }
+  
 
     while (1) {
-          unsigned int event_id, index;
+          unsigned int event_id;
+          int n_threads = 0;
           size_t num_rows, num_columns, num_coords;
           size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
-         
+          
+          pthread_t id;
 
+          if(n_threads == max_thread){
+
+            for(int i = 0; i < max_thread; i++){
+              if(pthread_join(t_id[i],(void*)EXIT_SUCCESS) == 0){
+                t_id[i] = 0;
+                n_threads--;
+                break;
+              }
+            }
+          }
           switch (get_next(fd_input)) {
+
             
-            pthread_t id;
+            
 
             case CMD_CREATE:
               if (parse_create(fd_input, &event_id, &num_rows, &num_columns) != 0) {
@@ -297,16 +323,19 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
               create_args->event_id = event_id;
               create_args->num_rows = num_rows;
               create_args->num_cols = num_columns;
+         
 
               if(pthread_create(&id,NULL,ems_create,create_args) != 0){
                 write_to_file("Failed to create event\n",STDERR_FILENO);
+                break;
               }
-              
-              index = add_tid(t_id,id,max_thread);
 
-              pthread_exit(EXIT_SUCCESS);
-                  
+
+              n_threads++;
+              add_tid(t_id,id,max_thread);
+              
               break;
+
 
             case CMD_RESERVE:
               num_coords = parse_reserve(fd_input, MAX_RESERVATION_SIZE, &event_id, xs, ys);
@@ -326,12 +355,13 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
               if(pthread_create(&id,NULL,ems_create,reserve_args) != 0){
 
                 write_to_file("Failed to reserve seats\n",STDERR_FILENO);
+                break;
               }
 
-              index = add_tid(t_id,id,max_thread);
-
-              pthread_exit(EXIT_SUCCESS);
+              n_threads++;
+              add_tid(t_id,id,max_thread);
               break;
+
 
             case CMD_SHOW:
               if (parse_show(fd_input, &event_id) != 0) {
@@ -341,25 +371,29 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
 
               struct ShowArgs* show_args = malloc(sizeof(struct ShowArgs));
 
-              if(pthread_create(&id,NULL,ems_show,show_args)){
+              if(pthread_create(&id,NULL,ems_show,show_args) != 0){
                   
                 write_to_file("Failed to show event\n",STDERR_FILENO);
+                break;
               
               }
-              
-              index = add_tid(t_id,id,max_thread);
+                n_threads++;
+                add_tid(t_id,id,max_thread);
 
-     
-          
-              break;
+                break;
+
 
             case CMD_LIST_EVENTS:
-              if (pthread_create(&id,NULL,ems_list_events,fd_output) != 0) {
+              if (pthread_create(&id,NULL,ems_list_events,&fd_output) != 0) {
                 write_to_file("Failed to list events\n",STDERR_FILENO);
+                break;
         
               }
- 
-              break;
+      
+                add_tid(t_id,id,max_thread);
+                n_threads++;
+                break;
+
 
             case CMD_WAIT:
               if (parse_wait(fd_input, &delay, NULL) == -1) {  // thread_id is not implemented
@@ -369,11 +403,14 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
 
               if (delay > 0) {
                 printf("Waiting...\n");
-                pthread_create(&id,NULL,ems_wait,delay);
+                pthread_create(&id,NULL,ems_wait,&delay);
+                add_tid(t_id,id,max_thread);
+                n_threads++;
+                break;
       
               }
-
               break;
+              
 
             case CMD_INVALID:
               write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
@@ -398,14 +435,14 @@ void compute_file(int fd_input, int fd_output, unsigned int delay, int max_threa
               break;
 
             case EOC:
+          
               eoc = 1;
-              close(fd_input);
-              close(fd_output);
-        
               break;
           }
 
           if(eoc){
+            close(fd_input);
+            close(fd_output);
             break;
           }
         
