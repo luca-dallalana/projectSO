@@ -14,7 +14,7 @@
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
 int eoc = 0;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; 
+
 
 
 
@@ -106,7 +106,6 @@ void* ems_create(void* args) {
     pthread_exit((void*)EXIT_FAILURE); 
   }
 
-
   pthread_rwlock_init(&event->lock_rw, NULL);
 
   pthread_rwlock_wrlock(&event -> lock_rw);
@@ -133,6 +132,7 @@ void* ems_create(void* args) {
     pthread_exit((void*)EXIT_FAILURE); 
   }
   pthread_rwlock_unlock(&event -> lock_rw);
+  free(args);
   pthread_exit((void*)EXIT_SUCCESS); 
 
 }
@@ -187,6 +187,7 @@ void* ems_reserve(void* args) {
   }
 
   pthread_rwlock_unlock(&event -> lock_rw);
+  free(args);
   pthread_exit((void*)EXIT_SUCCESS); 
 
 }
@@ -226,6 +227,7 @@ void* ems_show(void* args) {
 
   }
   pthread_rwlock_unlock(&event -> lock_rw);
+  free(args);
   pthread_exit((void*)EXIT_SUCCESS); 
 
 }
@@ -245,7 +247,7 @@ void* ems_list_events(void* output_fd) {
   
   struct ListNode* current = event_list->head;
   while (current != NULL) {
-    pthread_rwlock_rdlock(&current ->event -> lock_rw);
+    pthread_rwlock_wrlock(&current ->event -> lock_rw);
     write_to_file("Event: ",*(const int*)output_fd);
     char id[16];  
 
