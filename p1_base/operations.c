@@ -70,6 +70,7 @@ int ems_init(unsigned int delay_ms) {
 
   event_list = create_list();
   pthread_rwlock_init(&event_list -> list_lock_rw,NULL);
+  pthread_rwlock_init(&output_lock,NULL);
   state_access_delay_ms = delay_ms;
 
   return event_list == NULL;
@@ -315,7 +316,7 @@ void* compute_file(void* args){
     unsigned int delay= arguments->delay;
     free(args);
 
-    pthread_rwlock_init(&output_lock,NULL);
+    
 
     while (1){
       
