@@ -160,9 +160,22 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
             }
             
-            // if nothing failed it analises the input file and writes to the .out file its content
-            compute_file(fd_input,fd_output,delay,max_thread);
 
+            struct FileArgs* args = malloc(sizeof(struct FileArgs));
+            args->fd_input = fd_input;
+            args->fd_output = fd_output;
+            args->delay = delay;
+
+
+            // array that will contain the id of each thread 
+            pthread_t t_id[max_thread];
+            int n_threads = 0;
+            
+            // initializes the array
+
+            for(int i = 0; i < max_thread; i++){
+              pthread_create(&t_id[i],NULL,compute_file,args);
+            }
             // terminates the process
             exit(EXIT_SUCCESS);
           }

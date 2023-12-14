@@ -4,7 +4,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <fcntl.h>
 
 
 #include "eventlist.h"
@@ -14,7 +13,10 @@
 
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
-pthread_rwlock_t output_lock;
+int eoc = 0;
+
+
+
 
 void write_to_file(const char *message,const int output_fd){
   write(output_fd,message,strlen(message));
@@ -100,6 +102,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   }
 
   struct Event* event = malloc(sizeof(struct Event));
+
   if (event == NULL) {
     fprintf(stderr, "Error allocating memory for event\n");
     return 1;
@@ -127,14 +130,14 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   }
   
   pthread_rwlock_unlock(&event -> event_lock_rw);
-
+  
   if (append_to_list(event_list, event)) {
     fprintf(stderr, "Error appending event to list\n");
     free(event->data);
     free(event);
     return 1;
   }
- 
+  
   return 0; 
 
 }
@@ -144,7 +147,6 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
-    return 1;
     
   }
 
@@ -191,9 +193,8 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
   // If the reservation was not successful, free the seats that were reserved.
   if (i < num_seats) {
-    pthread_rwlock_wrlock(&event -> event_lock_rw);
+
     event->reservations--;
-    pthread_rwlock_unlock(&event -> event_lock_rw);
 
     for (size_t j = 0; j < i; j++) {
 
@@ -212,9 +213,10 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 }
 
 int ems_show(unsigned int event_id, const int output_fd) {
+
   
   if (event_list == NULL) {
-    write_to_file("EMS state must be initialized\n",STDERR_FILENO);
+    write_to_file("EMS state must be initialized\n",output_fd);
     return 1;
 
   }
@@ -230,7 +232,6 @@ int ems_show(unsigned int event_id, const int output_fd) {
   }
 
 
-  pthread_rwlock_wrlock(&output_lock);
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
 
@@ -253,7 +254,7 @@ int ems_show(unsigned int event_id, const int output_fd) {
     write_to_file("\n",output_fd);
 
   }
-  pthread_rwlock_unlock(&output_lock);
+
   return 0; 
 
 }
@@ -265,8 +266,6 @@ int ems_list_events(const int output_fd) {
     return 1;
      
   }
-
-  pthread_rwlock_wrlock(&output_lock);
 
   pthread_rwlock_rdlock(&event_list -> list_lock_rw);
   if (event_list->head == NULL) {
@@ -292,7 +291,7 @@ int ems_list_events(const int output_fd) {
     current = current->next;
     
   }
-  pthread_rwlock_unlock(&output_lock);
+  pthread_rwlock_unlock(&event_list -> list_lock_rw);
   return 0; 
 
 }
@@ -300,151 +299,118 @@ int ems_list_events(const int output_fd) {
 void ems_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
-
+  return 0; 
 }
 
 
 void* compute_file(void* args){
-
-    int lines_read = 0, eoc = 0;
-    struct FileArgs* arguments = (struct FileArgs*)args;
-    int fd_output = arguments->fd_output;
-    int fd_input = arguments->fd_input;
-    int thread_index = arguments->thread_index;
-    int max_thread = arguments ->max_threads;
-    unsigned int delay= arguments->delay;
-    free(args);
-
-    pthread_rwlock_init(&output_lock,NULL);
-
-    while (1){
-      
-      if(lines_read % max_thread != thread_index){
-        cleanup(fd_input);
-        lines_read++;
-        continue;
-      }
- 
-
-
-      unsigned int event_id;
-      size_t num_rows, num_columns, num_coords;
-      size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
-
-
-      switch (get_next(fd_input)) {
-        
-        
-        case CMD_CREATE:
-          
-          if (parse_create(fd_input, &event_id, &num_rows, &num_columns)) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
-            break;
-
-          }
-          if (ems_create(event_id, num_rows, num_columns)) {
-            fprintf(stderr, "Failed to create event\n");
-            break;
-      
-          } 
-          break;
-
-        case CMD_RESERVE:
-          
-          num_coords = parse_reserve(fd_input, MAX_RESERVATION_SIZE, &event_id, xs, ys);
-
-          if (num_coords == 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
-            break;
-
-          }
-        
-          if (ems_reserve(event_id, num_coords, xs, ys)) {
-            fprintf(stderr, "Failed to reserve seats\n");
-            break;
-           
-          }
-
-          break;
-
-        case CMD_SHOW:
-          
-          if (parse_show(fd_input, &event_id) != 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
-            break;
-
-          }
-
     
-          if (ems_show(event_id,fd_output)) {
-            fprintf(stderr, "Failed to show event\n");
-            break;
-          }
-          
+    struct FileArgs* arguments = (struct FileArgs*)args;
 
-          break;
+    int fd_input = arguments->fd_input;
+    int fd_output = arguments->fd_output;
+    unsigned int delay= arguments->delay;
 
-        case CMD_LIST_EVENTS:
-          if (ems_list_events(fd_output)) {
-            fprintf(stderr, "Failed to list events\n");
-            break;
-           
-          }
+    unsigned int event_id;
+    size_t num_rows, num_columns, num_coords;
+    size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
+    
+    
+    switch (get_next(fd_input)) {
 
-          break;
-
-        case CMD_WAIT:
-          if (parse_wait(fd_input, &delay, NULL) == -1) {  // thread_id is not implemented
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
-            continue;
-          
-          }
-
-          if (delay > 0) {
-            printf("Waiting...\n");
-            ems_wait(delay);
-            break;
-          }
-
-          break;
-
-        case CMD_INVALID:
+            
+     
+      case CMD_CREATE:
+        if (parse_create(STDIN_FILENO, &event_id, &num_rows, &num_columns) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
 
-          break;
+        }
 
-        case CMD_HELP:
-          printf(
-              "Available commands:\n"
-              "  CREATE <event_id> <num_rows> <num_columns>\n"
-              "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
-              "  SHOW <event_id>\n"
-              "  LIST\n"
-              "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
-              "  BARRIER\n"                      // Not implemented
-              "  HELP\n");
+        if (ems_create(event_id, num_rows, num_columns)) {
+          fprintf(stderr, "Failed to create event\n");
+        }
 
-          break;
+        break;
 
-        case CMD_BARRIER:  // Not implemented
-        case CMD_EMPTY:
-          break;
+      case CMD_RESERVE:
+        num_coords = parse_reserve(STDIN_FILENO, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
-        case EOC: 
-          eoc = 1;
-          close(fd_input);
-          break;
+        if (num_coords == 0) {
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
 
-          
-      }
-      if(eoc){
-        pthread_exit(0);
+        }
 
-      }
-      
-      lines_read++;
-      }
+        if (ems_reserve(event_id, num_coords, xs, ys)) {
+          fprintf(stderr, "Failed to reserve seats\n");
+        }
+
+        break;
+
+      case CMD_SHOW:
+        if (parse_show(STDIN_FILENO, &event_id) != 0) {
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+
+        }
+
+        if (ems_show(event_id)) {
+          fprintf(stderr, "Failed to show event\n");
+        }
+
+        break;
+
+      case CMD_LIST_EVENTS:
+        if (ems_list_events()) {
+          fprintf(stderr, "Failed to list events\n");
+        }
+
+        break;
+
+      case CMD_WAIT:
+        if (parse_wait(STDIN_FILENO, &delay, NULL) == -1) {  // thread_id is not implemented
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        
+        }
+
+        if (delay > 0) {
+          printf("Waiting...\n");
+          ems_wait(delay);
+        }
+
+        break;
+
+      case CMD_INVALID:
+        fprintf(stderr, "Invalid command. See HELP for usage\n");
+        break;
+
+      case CMD_HELP:
+        printf(
+            "Available commands:\n"
+            "  CREATE <event_id> <num_rows> <num_columns>\n"
+            "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
+            "  SHOW <event_id>\n"
+            "  LIST\n"
+            "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
+            "  BARRIER\n"                      // Not implemented
+            "  HELP\n");
+
+        break;
+
+      case CMD_BARRIER:  // Not implemented
+      case CMD_EMPTY:
+        break;
+
+      case EOC:
+        eoc = 1;          
+        break;
+        
+    }
+
+    if(eoc){
+        close(fd_input);
+        close(fd_output);
+
+    }
+        
     
-
 
 }
