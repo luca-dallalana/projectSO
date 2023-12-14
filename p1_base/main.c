@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
           
           // if nothing failed it analises the input file and writes to the .out file its content
           compute_file(fd_input,fd_output,delay,max_thread);
-
+          ems_terminate();
           // terminates the process
           exit(EXIT_SUCCESS);
         }
@@ -166,26 +166,24 @@ int main(int argc, char *argv[]) {
           exit(EXIT_FAILURE);
         }        
         else if(cur_pid != 0){
-
-          // parent process waits for all the child processes
+          
+          // parent process waits for all child processes
           for(int i = 0; i < max_proc; i++){
-            
+
             pid_t cpid = waitpid(pid[i],&status,0);
 
             if (cpid != -1 && WIFEXITED(status)){
                 printf("Child %d terminated with status: %d\n", cpid, WEXITSTATUS(status));
 
+            
             }
           }
-      
         }
   
     }
-
-
+      
   }
   closedir(dir);
-  ems_terminate();
   exit(EXIT_SUCCESS);
 }
 

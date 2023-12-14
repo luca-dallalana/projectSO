@@ -21,7 +21,7 @@ struct ReserveArgs{
 
 struct ShowArgs{
     unsigned int event_id;
-    const int output_fd;
+    int output_fd;
 };
 
 void compute_file(int fd_input, int fd_output, unsigned int delay, int max_thread);
