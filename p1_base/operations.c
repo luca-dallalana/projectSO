@@ -328,20 +328,11 @@ void* compute_file(void* thread_inf){
     unsigned int delay_ms;
     unsigned int thread_id;
     int thread_index = args->thread_index;
-    char* inputFilePath = args->fd_input;
     int fd_output = args->fd_output;
     int max_thread = args->max_threads;
-    int fd_input;
+    int fd_input = args->fd_input;
 
-    if(args -> lines_read == 0){
-      fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
-
-      if(fd_input < 0){
-        
-        write_to_file("Error opening inputfile\n",STDERR_FILENO);
-        exit(EXIT_FAILURE);
-      }
-    }
+    
     while (1){
       
       // all threads wait
@@ -375,7 +366,7 @@ void* compute_file(void* thread_inf){
 
           }
           if(should_execute(args -> lines_read,max_thread,thread_index)){
-            printf("create\n");
+      
 
             if (ems_create(event_id, num_rows, num_columns)) {
               fprintf(stderr, "Failed to create event\n");
@@ -397,14 +388,15 @@ void* compute_file(void* thread_inf){
           }
           if(should_execute(args -> lines_read,max_thread,thread_index)){
 
-            printf("reserve\n");
+            printf("reserve %i\n",thread_index);
             if (ems_reserve(event_id, num_coords, xs, ys)) {
               fprintf(stderr, "Failed to reserve seats\n");
               break;
             
             }
-     
+
             break;
+          
           }
           break;
 
@@ -416,7 +408,7 @@ void* compute_file(void* thread_inf){
           }
 
           if(should_execute(args -> lines_read,max_thread,thread_index)){
-            printf("show\n");
+          
 
             if (ems_show(event_id,fd_output)) {
               fprintf(stderr, "Failed to show event\n");
@@ -429,7 +421,7 @@ void* compute_file(void* thread_inf){
 
         case CMD_LIST_EVENTS:
           if(should_execute(args -> lines_read,max_thread,thread_index)){
-            printf("list\n");
+     
 
             if (ems_list_events(fd_output)) {
               fprintf(stderr, "Failed to list events\n");
@@ -479,11 +471,11 @@ void* compute_file(void* thread_inf){
           break;
 
         case CMD_BARRIER: 
+       
           printf("barrier\n");
-          args -> lines_read++;
           args->state = 1;
+      
           pthread_exit(&args->state);
-          cleanup(fd_input);
           break;
 
 

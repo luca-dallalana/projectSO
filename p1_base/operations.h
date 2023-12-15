@@ -16,7 +16,7 @@ struct FileArgs{
 
 struct Thread{
     pthread_t id;
-    char* fd_input;
+    int fd_input;
     int fd_output;
     int thread_index;
     int max_threads;

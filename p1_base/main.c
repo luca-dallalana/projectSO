@@ -158,14 +158,20 @@ int main(int argc, char *argv[]) {
             
 
             
-          
+
             for(int i = 0; i < max_thread; i++){
 
-             
+             int fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
+
+              if(fd_input < 0){
+                
+                write_to_file("Error opening inputfile\n",STDERR_FILENO);
+                exit(EXIT_FAILURE);
+              }
               pthread_t id;
               struct Thread* thread_inf = malloc(sizeof(struct Thread));
               thread_inf ->fd_output = fd_output;
-              thread_inf -> fd_input = inputFilePath;
+              thread_inf -> fd_input = fd_input;
               thread_inf->thread_index = i;
               thread_inf->max_threads = max_thread;
               thread_inf -> lines_read = 0;
@@ -199,12 +205,12 @@ int main(int argc, char *argv[]) {
                     args -> fd_input = t_id[i]->fd_input;
                     args->thread_index = i;
                     args->max_threads = max_thread;
-                    args -> lines_read = t_id[i]->lines_read;
-                    printf("%i\n",t_id[i]->lines_read);
+                    args -> lines_read = 0;
+                   
+                    free(t_id[i]);
                   
                     pthread_create(&id,NULL,compute_file,args);
                     args -> id = id;
-                    free(t_id[i]);
                     t_id[i] = args;
                 }
               }
