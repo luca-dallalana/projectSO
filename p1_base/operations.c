@@ -68,7 +68,7 @@ static size_t seat_index(struct Event* event, size_t row, size_t col) { return (
 
 int ems_init(unsigned int delay_ms) {
   if (event_list != NULL) {
-    fprintf(stderr, "EMS state has already been initialized\n");
+    write_to_file("EMS state has already been initialized\n",STDERR_FILENO);
     return 1;
   }
 
@@ -82,7 +82,7 @@ int ems_init(unsigned int delay_ms) {
 
 int ems_terminate() {
   if (event_list == NULL) {
-    fprintf(stderr, "EMS state must be initialized\n");
+    write_to_file("EMS state must be initialized\n",STDERR_FILENO);
     return 1;
   }
   pthread_rwlock_destroy(&global_lock);
@@ -95,20 +95,20 @@ int ems_terminate() {
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
 
   if (event_list == NULL) {
-    fprintf(stderr, "EMS state must be initialized\n");
+    write_to_file("EMS state must be initialized\n",STDERR_FILENO);
     return 1;
   }
     
 
   if (get_event_with_delay(event_id) != NULL) {
-    fprintf(stderr, "Event already exists\n");
+    write_to_file("Event already exists\n",STDERR_FILENO);
     return 1;
     
   }
 
   struct Event* event = malloc(sizeof(struct Event));
   if (event == NULL) {
-    fprintf(stderr, "Error allocating memory for event\n");
+    write_to_file("Error allocating memory for event\n",STDERR_FILENO);
     return 1;
     
   }
@@ -123,7 +123,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   event->data = malloc(num_rows * num_cols * sizeof(unsigned int));
  
   if (event->data == NULL) {
-    fprintf(stderr, "Error allocating memory for event data\n");
+    write_to_file("Error allocating memory for event data\n",STDERR_FILENO);
     free(event);
     return 1;
 
@@ -136,7 +136,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   pthread_rwlock_unlock(&event -> event_lock_rw);
 
   if (append_to_list(event_list, event)) {
-    fprintf(stderr, "Error appending event to list\n");
+    write_to_file("Error appending event to list\n",STDERR_FILENO);
     free(event->data);
     free(event);
     return 1;
@@ -150,7 +150,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
 
   if (event_list == NULL) {
-    fprintf(stderr, "EMS state must be initialized\n");
+    write_to_file("EMS state must be initialized\n",STDERR_FILENO);
     return 1;
     
   }
@@ -176,13 +176,14 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     size_t col = ys[i];
 
     if (row <= 0 || row > event->rows || col <= 0 || col > event->cols) {
-      fprintf(stderr, "Invalid seat\n");
+      write_to_file("Invalid seat\n",STDERR_FILENO);
       
       break;
     }
 
     if (*get_seat_with_delay(event, seat_index(event, row, col)) != 0) {
-      fprintf(stderr, "Seat already reserved\n");
+
+      write_to_file("Seat already reserved\n",STDERR_FILENO);
           
       break;
     }
@@ -361,15 +362,16 @@ void* compute_file(void* thread_inf){
         case CMD_CREATE:
           
           if (parse_create(fd_input, &event_id, &num_rows, &num_columns)) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+          
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             break;
 
           }
           if(should_execute(args -> lines_read,max_thread,thread_index)){
-      
+
 
             if (ems_create(event_id, num_rows, num_columns)) {
-              fprintf(stderr, "Failed to create event\n");
+              write_to_file("Failed to create event\n",STDERR_FILENO);
               break;
         
             } 
@@ -382,15 +384,15 @@ void* compute_file(void* thread_inf){
           num_coords = parse_reserve(fd_input, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
           if (num_coords == 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             break;
 
           }
           if(should_execute(args -> lines_read,max_thread,thread_index)){
-
-            printf("reserve %i\n",thread_index);
+        
             if (ems_reserve(event_id, num_coords, xs, ys)) {
-              fprintf(stderr, "Failed to reserve seats\n");
+         
+              write_to_file("Failed to reserve seats\n",STDERR_FILENO);
               break;
             
             }
@@ -402,16 +404,17 @@ void* compute_file(void* thread_inf){
 
         case CMD_SHOW:
           if (parse_show(fd_input, &event_id) != 0) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             break;
 
           }
 
           if(should_execute(args -> lines_read,max_thread,thread_index)){
           
-
+     
             if (ems_show(event_id,fd_output)) {
-              fprintf(stderr, "Failed to show event\n");
+
+              write_to_file("Failed to show event\n",STDERR_FILENO);
               break;
             }
             
@@ -422,9 +425,9 @@ void* compute_file(void* thread_inf){
         case CMD_LIST_EVENTS:
           if(should_execute(args -> lines_read,max_thread,thread_index)){
      
-
+      
             if (ems_list_events(fd_output)) {
-              fprintf(stderr, "Failed to list events\n");
+              write_to_file("Failed to list events\n",STDERR_FILENO);
               break;
             
             }
@@ -435,7 +438,7 @@ void* compute_file(void* thread_inf){
 
         case CMD_WAIT:
           if (parse_wait(fd_input, &delay_ms, &thread_id) == -1) { 
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
             continue;
           
           }
@@ -453,7 +456,7 @@ void* compute_file(void* thread_inf){
           break;
 
         case CMD_INVALID:
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          write_to_file("Invalid command. See HELP for usage\n",STDERR_FILENO);
 
           break;
 
@@ -471,8 +474,7 @@ void* compute_file(void* thread_inf){
           break;
 
         case CMD_BARRIER: 
-       
-          printf("barrier\n");
+   
           args->state = 1;
       
           pthread_exit(&args->state);

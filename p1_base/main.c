@@ -176,7 +176,9 @@ int main(int argc, char *argv[]) {
               thread_inf->max_threads = max_thread;
               thread_inf -> lines_read = 0;
             
-              pthread_create(&id,NULL,compute_file,thread_inf);
+              if(pthread_create(&id,NULL,compute_file,thread_inf)){
+                exit(EXIT_FAILURE);
+              }
               thread_inf -> id = id;
               t_id[i] = thread_inf;
                 
@@ -185,35 +187,40 @@ int main(int argc, char *argv[]) {
             
             int n_barrier = 0;
           
-            
+            // checks if the threads reached barrier (exit status 1)
             for(int i = 0; i < max_thread; i++){
               if(pthread_join(t_id[i]->id,NULL) != 0){
-                exit(1);
+                exit(EXIT_FAILURE);
               }
               if(t_id[i]->state == 1){
                 n_barrier++;
               }
             }
+            
 
-              if(n_barrier > 0){
-                
-                for(int i = 0; i < max_thread; i++){
+            // if all of them reach barrier creates new threads to process the remaining lines in the input file
+            if(n_barrier > 0){
+              
+              for(int i = 0; i < max_thread; i++){
 
-                    pthread_t id;
-                    struct Thread* args = malloc(sizeof(struct Thread));
-                    args ->fd_output = fd_output;
-                    args -> fd_input = t_id[i]->fd_input;
-                    args->thread_index = i;
-                    args->max_threads = max_thread;
-                    args -> lines_read = 0;
-                   
-                    free(t_id[i]);
+                  pthread_t id;
+                  struct Thread* args = malloc(sizeof(struct Thread));
+                  args ->fd_output = fd_output;
+                  args -> fd_input = t_id[i]->fd_input;
+                  args->thread_index = i;
+                  args->max_threads = max_thread;
+                  args -> lines_read = 0;
                   
-                    pthread_create(&id,NULL,compute_file,args);
-                    args -> id = id;
-                    t_id[i] = args;
-                }
+                  free(t_id[i]);
+                
+                  if(pthread_create(&id,NULL,compute_file,args)){
+                    exit(EXIT_FAILURE);
+                  }
+                  args -> id = id;
+                  // adds the new threads to the array of current threads
+                  t_id[i] = args;
               }
+            }
 
 
             ems_terminate();
