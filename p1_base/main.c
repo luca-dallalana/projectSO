@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
           // child process code
           if(cur_pid == 0){
             // array that will contain the id of each thread 
-            pthread_t t_id[max_thread];      
+           struct Thread* t_id[max_thread];      
             ems_init(delay);
             
 
@@ -144,9 +144,7 @@ int main(int argc, char *argv[]) {
             char inputFilePath[MAX_PATH_SIZE]; // Max size for a path
             snprintf(inputFilePath, MAX_PATH_SIZE, "%s/%s.jobs", argv[1], fileName); // Concatenates the directory path with the file name
                     
-            int fd_input;
-
-
+       
             char outputFilePath[MAX_PATH_SIZE];
             snprintf(outputFilePath, MAX_PATH_SIZE, "%s/%s.out", argv[1], fileName); 
             
@@ -159,34 +157,59 @@ int main(int argc, char *argv[]) {
             }
             
 
-
-
+            
+          
             for(int i = 0; i < max_thread; i++){
 
-              fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
-
-              if(fd_input < 0){
+             
+              pthread_t id;
+              struct Thread* thread_inf = malloc(sizeof(struct Thread));
+              thread_inf ->fd_output = fd_output;
+              thread_inf -> fd_input = inputFilePath;
+              thread_inf->thread_index = i;
+              thread_inf->max_threads = max_thread;
+              thread_inf -> lines_read = 0;
+            
+              pthread_create(&id,NULL,compute_file,thread_inf);
+              thread_inf -> id = id;
+              t_id[i] = thread_inf;
                 
-                write_to_file("Error opening inputfile\n",STDERR_FILENO);
-                exit(EXIT_FAILURE);
-              }
-              struct FileArgs* args = malloc(sizeof(struct FileArgs));
-      
-              args->fd_input = fd_input;
-              args->fd_output = fd_output;
-              args->max_threads = max_thread;
-              args -> thread_index = i;
-              pthread_create(&t_id[i],NULL,compute_file,args);
-                
-            }
-
-            for(int i = 0; i < max_thread; i++){
-              if(pthread_join(t_id[i],1) == 0){
-                
-              }
-              
             }
             
+            
+            int n_barrier = 0;
+          
+            
+            for(int i = 0; i < max_thread; i++){
+              if(pthread_join(t_id[i]->id,NULL) != 0){
+                exit(1);
+              }
+              if(t_id[i]->state == 1){
+                n_barrier++;
+              }
+            }
+
+              if(n_barrier > 0){
+                
+                for(int i = 0; i < max_thread; i++){
+
+                    pthread_t id;
+                    struct Thread* args = malloc(sizeof(struct Thread));
+                    args ->fd_output = fd_output;
+                    args -> fd_input = t_id[i]->fd_input;
+                    args->thread_index = i;
+                    args->max_threads = max_thread;
+                    args -> lines_read = t_id[i]->lines_read;
+                    printf("%i\n",t_id[i]->lines_read);
+                  
+                    pthread_create(&id,NULL,compute_file,args);
+                    args -> id = id;
+                    free(t_id[i]);
+                    t_id[i] = args;
+                }
+              }
+
+
             ems_terminate();
             close(fd_output);
             // terminates the process

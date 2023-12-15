@@ -17,6 +17,9 @@ static unsigned int state_access_delay_ms = 0;
 pthread_rwlock_t global_lock;
 int wait_id = -1;
 
+
+
+
 void write_to_file(const char *message,const int output_fd){
   write(output_fd,message,strlen(message));
 }
@@ -82,6 +85,8 @@ int ems_terminate() {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
+  pthread_rwlock_destroy(&global_lock);
+  pthread_rwlock_destroy(&event_list -> list_lock_rw);
 
   free_list(event_list);
   return 0;
@@ -315,22 +320,28 @@ int should_execute(int lines_read, int max_thread, int thread_index){
   return 1;
 }
 
-void* compute_file(void* args){
 
+void* compute_file(void* thread_inf){
 
-    int lines_read = 0, eoc = 0;
-    struct FileArgs* arguments = (struct FileArgs*)args;
-    int fd_output = arguments->fd_output;
-    int fd_input = arguments->fd_input;
-    int thread_index = arguments->thread_index;
-    int max_thread = arguments ->max_threads;
-    free(args);
-
+    struct Thread* args = (struct Thread*)thread_inf;
+    int eoc = 0;
     unsigned int delay_ms;
     unsigned int thread_id;
+    int thread_index = args->thread_index;
+    char* inputFilePath = args->fd_input;
+    int fd_output = args->fd_output;
+    int max_thread = args->max_threads;
+    int fd_input;
 
-    
+    if(args -> lines_read == 0){
+      fd_input = open(inputFilePath, O_RDONLY); // Opens the file to read only mode
 
+      if(fd_input < 0){
+        
+        write_to_file("Error opening inputfile\n",STDERR_FILENO);
+        exit(EXIT_FAILURE);
+      }
+    }
     while (1){
       
       // all threads wait
@@ -353,7 +364,6 @@ void* compute_file(void* args){
       size_t num_rows, num_columns, num_coords;
       size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
 
-
       switch (get_next(fd_input)) {
         
         
@@ -364,20 +374,20 @@ void* compute_file(void* args){
             break;
 
           }
-          if(should_execute(lines_read,max_thread,thread_index)){
+          if(should_execute(args -> lines_read,max_thread,thread_index)){
+            printf("create\n");
 
             if (ems_create(event_id, num_rows, num_columns)) {
               fprintf(stderr, "Failed to create event\n");
               break;
         
             } 
-        
+           
             break;
           }
           break;
 
         case CMD_RESERVE:
-          
           num_coords = parse_reserve(fd_input, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
           if (num_coords == 0) {
@@ -385,26 +395,28 @@ void* compute_file(void* args){
             break;
 
           }
-          if(should_execute(lines_read,max_thread,thread_index)){
+          if(should_execute(args -> lines_read,max_thread,thread_index)){
 
+            printf("reserve\n");
             if (ems_reserve(event_id, num_coords, xs, ys)) {
               fprintf(stderr, "Failed to reserve seats\n");
               break;
             
             }
+     
             break;
           }
           break;
 
         case CMD_SHOW:
-          
           if (parse_show(fd_input, &event_id) != 0) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");
             break;
 
           }
 
-          if(should_execute(lines_read,max_thread,thread_index)){
+          if(should_execute(args -> lines_read,max_thread,thread_index)){
+            printf("show\n");
 
             if (ems_show(event_id,fd_output)) {
               fprintf(stderr, "Failed to show event\n");
@@ -416,13 +428,15 @@ void* compute_file(void* args){
           break;
 
         case CMD_LIST_EVENTS:
-          if(should_execute(lines_read,max_thread,thread_index)){
+          if(should_execute(args -> lines_read,max_thread,thread_index)){
+            printf("list\n");
 
             if (ems_list_events(fd_output)) {
               fprintf(stderr, "Failed to list events\n");
               break;
             
             }
+            
             break;
           }
           break;
@@ -433,7 +447,7 @@ void* compute_file(void* args){
             continue;
           
           }
-          if(should_execute(lines_read,max_thread,thread_index)){
+          if(should_execute(args -> lines_read,max_thread,thread_index)){
 
             if (delay_ms > 0) {
               printf("Waiting...\n");
@@ -465,7 +479,14 @@ void* compute_file(void* args){
           break;
 
         case CMD_BARRIER: 
-          pthread_exit((void*)EXIT_FAILURE);
+          printf("barrier\n");
+          args -> lines_read++;
+          args->state = 1;
+          pthread_exit(&args->state);
+          cleanup(fd_input);
+          break;
+
+
         case CMD_EMPTY:
           break;
 
@@ -477,11 +498,12 @@ void* compute_file(void* args){
           
       }
       if(eoc){
-        pthread_exit((void*)EXIT_SUCCESS);
+        args->state = 0;
+        pthread_exit(&args->state);
 
       }
       
-      lines_read++;
+      args -> lines_read++;
       }
     
 

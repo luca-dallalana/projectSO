@@ -14,8 +14,17 @@ struct FileArgs{
 
 };
 
+struct Thread{
+    pthread_t id;
+    char* fd_input;
+    int fd_output;
+    int thread_index;
+    int max_threads;
+    int state;
+    int lines_read;
+};
 
-void* compute_file(void* args);
+void* compute_file(void* thread_inf);
 
 void write_to_file(const char *message,const int output_fd);
 

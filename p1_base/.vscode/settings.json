@@ -3,6 +3,8 @@
         "*.pl": "prolog",
         "constants.h": "c",
         "stddef.h": "c",
-        "parser.h": "c"
+        "parser.h": "c",
+        "locale": "c",
+        "string": "c"
     }
 }
