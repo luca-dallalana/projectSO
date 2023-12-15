@@ -9,7 +9,6 @@
 struct FileArgs{
     int fd_input;
     int fd_output;
-    unsigned int delay;
     int thread_index;
     int max_threads;
 
@@ -56,7 +55,7 @@ int ems_list_events(const int output_fd);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
-void ems_wait(unsigned int delay_ms);
+void ems_wait(unsigned int thread_id);
 
 
 

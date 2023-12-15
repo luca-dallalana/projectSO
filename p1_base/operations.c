@@ -14,7 +14,8 @@
 
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
-pthread_rwlock_t output_lock;
+pthread_rwlock_t global_lock;
+int wait_id = -1;
 
 void write_to_file(const char *message,const int output_fd){
   write(output_fd,message,strlen(message));
@@ -70,7 +71,7 @@ int ems_init(unsigned int delay_ms) {
 
   event_list = create_list();
   pthread_rwlock_init(&event_list -> list_lock_rw,NULL);
-  pthread_rwlock_init(&output_lock,NULL);
+  pthread_rwlock_init(&global_lock,NULL);
   state_access_delay_ms = delay_ms;
 
   return event_list == NULL;
@@ -231,7 +232,7 @@ int ems_show(unsigned int event_id, const int output_fd) {
   }
 
 
-  pthread_rwlock_wrlock(&output_lock);
+  pthread_rwlock_wrlock(&global_lock);
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
 
@@ -254,7 +255,7 @@ int ems_show(unsigned int event_id, const int output_fd) {
     write_to_file("\n",output_fd);
 
   }
-  pthread_rwlock_unlock(&output_lock);
+  pthread_rwlock_unlock(&global_lock);
   return 0; 
 
 }
@@ -267,7 +268,7 @@ int ems_list_events(const int output_fd) {
      
   }
 
-  pthread_rwlock_wrlock(&output_lock);
+  pthread_rwlock_wrlock(&global_lock);
 
   pthread_rwlock_rdlock(&event_list -> list_lock_rw);
   if (event_list->head == NULL) {
@@ -293,14 +294,15 @@ int ems_list_events(const int output_fd) {
     current = current->next;
     
   }
-  pthread_rwlock_unlock(&output_lock);
+  pthread_rwlock_unlock(&global_lock);
   return 0; 
 
 }
 
-void ems_wait(unsigned int delay_ms) {
-  struct timespec delay = delay_to_timespec(delay_ms);
-  nanosleep(&delay, NULL);
+void ems_wait(unsigned int thread_id) {
+  pthread_rwlock_wrlock(&global_lock);
+  wait_id = (int)thread_id;
+  pthread_rwlock_unlock(&global_lock);
 
 }
 
@@ -313,13 +315,31 @@ void* compute_file(void* args){
     int fd_input = arguments->fd_input;
     int thread_index = arguments->thread_index;
     int max_thread = arguments ->max_threads;
-    unsigned int delay= arguments->delay;
     free(args);
+
+    unsigned int delay_ms;
+    unsigned int thread_id;
 
     
 
     while (1){
       
+      // all threads wait
+      if(wait_id == 0){
+
+        struct timespec delay = delay_to_timespec(delay_ms);
+        nanosleep(&delay, NULL);
+      }
+
+      // only a specific thread waits
+      if(wait_id == thread_index){
+
+        struct timespec delay = delay_to_timespec(delay_ms);
+        nanosleep(&delay, NULL);
+        wait_id = -1;
+      }
+
+      // if the thread wasn't assigned the current line, it jumps to the next line in the input file
       if(lines_read % max_thread != thread_index){
         cleanup(fd_input);
         lines_read++;
@@ -395,15 +415,16 @@ void* compute_file(void* args){
           break;
 
         case CMD_WAIT:
-          if (parse_wait(fd_input, &delay, NULL) == -1) {  // thread_id is not implemented
+          if (parse_wait(fd_input, &delay_ms, &thread_id) == -1) { 
             fprintf(stderr, "Invalid command. See HELP for usage\n");
             continue;
           
           }
 
-          if (delay > 0) {
+          if (delay_ms > 0) {
             printf("Waiting...\n");
-            ems_wait(delay);
+            ems_wait(thread_id);
+            
             break;
           }
 
@@ -427,7 +448,8 @@ void* compute_file(void* args){
 
           break;
 
-        case CMD_BARRIER:  // Not implemented
+        case CMD_BARRIER: 
+          return 1;
         case CMD_EMPTY:
           break;
 
@@ -439,7 +461,7 @@ void* compute_file(void* args){
           
       }
       if(eoc){
-        pthread_exit(0);
+        return 0;
 
       }
       

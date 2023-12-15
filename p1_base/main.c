@@ -174,7 +174,6 @@ int main(int argc, char *argv[]) {
       
               args->fd_input = fd_input;
               args->fd_output = fd_output;
-              args->delay = delay;
               args->max_threads = max_thread;
               args -> thread_index = i;
               pthread_create(&t_id[i],NULL,compute_file,args);

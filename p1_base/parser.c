@@ -239,10 +239,12 @@ int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
   }
 
   if (ch == ' ') {
+
     if (thread_id == NULL) {
       cleanup(fd);
       return 0;
     }
+
 
     if (read_uint(fd, thread_id, &ch) != 0 || (ch != '\n' && ch != '\0')) {
       cleanup(fd);
