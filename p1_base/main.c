@@ -181,7 +181,10 @@ int main(int argc, char *argv[]) {
             }
 
             for(int i = 0; i < max_thread; i++){
-              pthread_join(t_id[i],0);
+              if(pthread_join(t_id[i],1) == 0){
+                
+              }
+              
             }
             
             ems_terminate();

@@ -307,7 +307,16 @@ void ems_wait(unsigned int thread_id) {
 }
 
 
+// checks if the current thread sould execute the command 
+int should_execute(int lines_read, int max_thread, int thread_index){
+  if(lines_read % max_thread != thread_index){
+    return 0;
+  }
+  return 1;
+}
+
 void* compute_file(void* args){
+
 
     int lines_read = 0, eoc = 0;
     struct FileArgs* arguments = (struct FileArgs*)args;
@@ -338,16 +347,8 @@ void* compute_file(void* args){
         nanosleep(&delay, NULL);
         wait_id = -1;
       }
-
-      // if the thread wasn't assigned the current line, it jumps to the next line in the input file
-      if(lines_read % max_thread != thread_index){
-        cleanup(fd_input);
-        lines_read++;
-        continue;
-      }
+     
  
-
-
       unsigned int event_id;
       size_t num_rows, num_columns, num_coords;
       size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
@@ -363,11 +364,16 @@ void* compute_file(void* args){
             break;
 
           }
-          if (ems_create(event_id, num_rows, num_columns)) {
-            fprintf(stderr, "Failed to create event\n");
+          if(should_execute(lines_read,max_thread,thread_index)){
+
+            if (ems_create(event_id, num_rows, num_columns)) {
+              fprintf(stderr, "Failed to create event\n");
+              break;
+        
+            } 
+        
             break;
-      
-          } 
+          }
           break;
 
         case CMD_RESERVE:
@@ -379,13 +385,15 @@ void* compute_file(void* args){
             break;
 
           }
-        
-          if (ems_reserve(event_id, num_coords, xs, ys)) {
-            fprintf(stderr, "Failed to reserve seats\n");
-            break;
-           
-          }
+          if(should_execute(lines_read,max_thread,thread_index)){
 
+            if (ems_reserve(event_id, num_coords, xs, ys)) {
+              fprintf(stderr, "Failed to reserve seats\n");
+              break;
+            
+            }
+            break;
+          }
           break;
 
         case CMD_SHOW:
@@ -396,22 +404,27 @@ void* compute_file(void* args){
 
           }
 
-    
-          if (ems_show(event_id,fd_output)) {
-            fprintf(stderr, "Failed to show event\n");
+          if(should_execute(lines_read,max_thread,thread_index)){
+
+            if (ems_show(event_id,fd_output)) {
+              fprintf(stderr, "Failed to show event\n");
+              break;
+            }
+            
             break;
           }
-          
-
           break;
 
         case CMD_LIST_EVENTS:
-          if (ems_list_events(fd_output)) {
-            fprintf(stderr, "Failed to list events\n");
-            break;
-           
-          }
+          if(should_execute(lines_read,max_thread,thread_index)){
 
+            if (ems_list_events(fd_output)) {
+              fprintf(stderr, "Failed to list events\n");
+              break;
+            
+            }
+            break;
+          }
           break;
 
         case CMD_WAIT:
@@ -420,14 +433,17 @@ void* compute_file(void* args){
             continue;
           
           }
+          if(should_execute(lines_read,max_thread,thread_index)){
 
-          if (delay_ms > 0) {
-            printf("Waiting...\n");
-            ems_wait(thread_id);
-            
+            if (delay_ms > 0) {
+              printf("Waiting...\n");
+              ems_wait(thread_id);
+              
+              break;
+            }
+
             break;
           }
-
           break;
 
         case CMD_INVALID:
@@ -449,7 +465,7 @@ void* compute_file(void* args){
           break;
 
         case CMD_BARRIER: 
-          return 1;
+          pthread_exit((void*)EXIT_FAILURE);
         case CMD_EMPTY:
           break;
 
@@ -461,7 +477,7 @@ void* compute_file(void* args){
           
       }
       if(eoc){
-        return 0;
+        pthread_exit((void*)EXIT_SUCCESS);
 
       }
       
