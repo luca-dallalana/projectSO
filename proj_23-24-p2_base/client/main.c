@@ -9,8 +9,7 @@
 
 int main(int argc, char* argv[]) {
   if (argc < 5) {
-    fprintf(stderr, "Usage: %s <request pipe path> <response pipe path> <server pipe path> <.jobs file path>\n",
-            argv[0]);
+    fprintf(stderr, "Usage: %s <request pipe path> <response pipe path> <server pipe path> <.jobs file path>\n", argv[0]);
     return 1;
   }
 
@@ -29,7 +28,7 @@ int main(int argc, char* argv[]) {
   char out_path[MAX_JOB_FILE_NAME_SIZE];
   strcpy(out_path, argv[4]);
   strcpy(strrchr(out_path, '.'), ".out");
-
+  
   int in_fd = open(argv[4], O_RDONLY);
   if (in_fd == -1) {
     fprintf(stderr, "Failed to open input file. Path: %s\n", argv[4]);

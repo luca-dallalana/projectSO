@@ -1,10 +1,12 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 
 #include "common/constants.h"
 #include "common/io.h"
 #include "operations.h"
+
 
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
@@ -30,14 +32,31 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  unlink(argv[1]);
   //TODO: Intialize server, create worker threads
+
+  if(mkfifo(argv[1],0777) < 0){
+    return 1;
+  }
+
+  int server_pipe;
+  if(server_pipe = open(argv[1],O_RDONLY) < 0){
+    return 1;
+  }
+
+
+  if(session_request(server_pipe)){
+    fprintf(stderr,"Failed session request\n");
+    return 1;
+  }
 
   while (1) {
     //TODO: Read from pipe
     //TODO: Write new client to the producer-consumer buffer
+
   }
 
   //TODO: Close Server
-
+  close(server_pipe);
   ems_terminate();
 }

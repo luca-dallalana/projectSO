@@ -1,12 +1,39 @@
-#ifndef SERVER_OPERATIONS_H
-#define SERVER_OPERATIONS_H
+#ifndef EMS_OPERATIONS_H
+#define EMS_OPERATIONS_H
+#define MAX_PATH_SIZE 256 + 2
+
 
 #include <stddef.h>
+#include "parser.h"
+
+struct FileArgs{
+    int fd_input;
+    int fd_output;
+    int thread_index;
+    int max_threads;
+
+};
+
+struct Thread{
+    pthread_t id;
+    int fd_input;
+    int fd_output;
+    int thread_index;
+    int max_threads;
+    int state;
+    int lines_read;
+};
+
+void* compute_file(void* thread_inf);
+
+void write_to_file(const char *message,const int output_fd);
+
+char* parse_file_name( char *fileName);
 
 /// Initializes the EMS state.
-/// @param delay_us Delay in microseconds.
+/// @param delay_ms State access delay in milliseconds.
 /// @return 0 if the EMS state was initialized successfully, 1 otherwise.
-int ems_init(unsigned int delay_us);
+int ems_init(unsigned int delay_ms);
 
 /// Destroys the EMS state.
 int ems_terminate();
@@ -24,19 +51,21 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols);
 /// @param xs Array of rows of the seats to reserve.
 /// @param ys Array of columns of the seats to reserve.
 /// @return 0 if the reservation was created successfully, 1 otherwise.
-int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys);
+int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys);
 
 /// Prints the given event.
-/// @param out_fd File descriptor to print the event to.
 /// @param event_id Id of the event to print.
 /// @return 0 if the event was printed successfully, 1 otherwise.
-int ems_show(int out_fd, unsigned int event_id);
+int ems_show(unsigned int event_id, const int output_fd);
 
 /// Prints all the events.
-/// @param out_fd File descriptor to print the events to.
 /// @return 0 if the events were printed successfully, 1 otherwise.
-int ems_list_events(int out_fd);
+int ems_list_events(const int output_fd);
 
-int session_request(int pipe);
+/// Waits for a given amount of time.
+/// @param delay_us Delay in milliseconds.
+void ems_wait(unsigned int thread_id);
 
-#endif  // SERVER_OPERATIONS_H
+
+
+#endif  // EMS_OPERATIONS_H

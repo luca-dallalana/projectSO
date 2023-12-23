@@ -1,18 +1,8 @@
-#ifndef SERVER_EVENT_LIST_H
-#define SERVER_EVENT_LIST_H
+#ifndef EVENT_LIST_H
+#define EVENT_LIST_H
 
-#include <pthread.h>
 #include <stddef.h>
-
-
-struct Session {
-  int active;
-  int session_id;
-  char req_pipe_path[40];
-  char resp_pipe_path[40];
-};
-
-struct Session session;
+#include <pthread.h>
 
 struct Event {
   unsigned int id;            /// Event id
@@ -21,8 +11,9 @@ struct Event {
   size_t cols;  /// Number of columns.
   size_t rows;  /// Number of rows.
 
-  unsigned int* data;     /// Array of size rows * cols with the reservations for each seat.
-  pthread_mutex_t mutex;  // Mutex to protect the event
+  unsigned int* data;  /// Array of size rows * cols with the reservations for each seat.
+ 
+  pthread_rwlock_t event_lock_rw;
 };
 
 struct ListNode {
@@ -34,8 +25,12 @@ struct ListNode {
 struct EventList {
   struct ListNode* head;  // Head of the list
   struct ListNode* tail;  // Tail of the list
-  pthread_rwlock_t rwl;   // Mutex to protect the list
+  pthread_rwlock_t list_lock_rw;
 };
+
+
+
+
 
 /// Creates a new event list.
 /// @return Newly created event list, NULL on failure
@@ -55,9 +50,7 @@ void free_list(struct EventList* list);
 /// Retrieves an event in the list.
 /// @param list Event list to be searched
 /// @param event_id Event id.
-/// @param from First node to be searched.
-/// @param to Last node to be searched.
 /// @return Pointer to the event if found, NULL otherwise.
-struct Event* get_event(struct EventList* list, unsigned int event_id, struct ListNode* from, struct ListNode* to);
+struct Event* get_event(struct EventList* list, unsigned int event_id);
 
-#endif  // SERVER_EVENT_LIST_H
+#endif  // EVENT_LIST_H
