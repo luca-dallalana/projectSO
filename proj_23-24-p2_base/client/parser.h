@@ -12,7 +12,8 @@ enum Command {
   CMD_HELP,
   CMD_EMPTY,
   CMD_INVALID,
-  EOC  // End of commands
+  EOC,  // End of commands
+  CMD_REQUEST
 };
 
 /// Reads a line and returns the corresponding command.

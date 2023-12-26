@@ -7,6 +7,7 @@
 
 #include "common/io.h"
 #include "eventlist.h"
+#include "common/constants.h"
 
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_us = 0;
@@ -283,22 +284,3 @@ int ems_list_events(int out_fd) {
   return 0;
 }
 
-int session_request(int pipe){
-  char buffer[256];
-  int bytesread = read(pipe,buffer,sizeof(buffer));
-
-  if(bytesread > 0){
-    sscanf(buffer,"%d %d",&session.req_pipe_path,&session.resp_pipe_path);
-    session.session_id = 1;
-    session.active = 1;
-
-    int resp_pipe = open(session.resp_pipe_path,O_WRONLY);
-    int req_pipe = open(session.req_pipe_path, O_RDONLY);
-    if(resp_pipe < 0 || req_pipe < 0){
-      return 1;
-    }
-    write(resp_pipe,session.session_id,sizeof(int));
-    return 0;
-  }
-  return 1;
-}
