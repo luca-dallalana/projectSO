@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -34,66 +36,116 @@ int session_request(int pipe){
 
 
 int process_request(enum Command* code, int request_pipe, int response_pipe){
-  if(code == 0){
-    unsigned int event_id;
-    size_t num_rows;
-    size_t num_cols;
-
-    if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
-    read(request_pipe,&num_rows,sizeof(size_t)) < 0 || 
-    read(request_pipe,&num_cols,sizeof(size_t)) < 0) return 1;
-
-
-    int data = ems_create(event_id,num_rows,num_cols);
-    if(write(response_pipe,&data,sizeof(int)) < 0) return 1;
-
-    return 0;
-  }
-  else if(code == 1){
-    unsigned int event_id;
-    size_t num_seats;
-    size_t* xs;
-    size_t* ys;
-
-    if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
-    read(request_pipe,&num_seats,sizeof(size_t)) < 0 || 
-    read(request_pipe,&xs,sizeof(size_t*)) < 0 || read(request_pipe,&ys,sizeof(size_t*)) < 0)  return 1;
-
-    int data = ems_reserve(event_id,num_seats,xs,ys);
+  switch ((int)code){
     
-    if(write(response_pipe,&data,sizeof(int)) < 0) return 1;
+    // create
+    case 3:
+      unsigned int event_id;
+      size_t num_rows;
+      size_t num_cols;
 
-    return 0;
+      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
+      read(request_pipe,&num_rows,sizeof(size_t)) < 0 || 
+      read(request_pipe,&num_cols,sizeof(size_t)) < 0) return 1;
 
-  }
-  else if(code == 2){
-    int out_fd;
-    unsigned int event_id;
 
-    if(read(request_pipe,&out_fd,sizeof(int)) < 0 || read(request_pipe,&event_id,sizeof(unsigned int)) < 0) return 1;
+      int create_value = ems_create(event_id,num_rows,num_cols);
+      if(write(response_pipe,&create_value,sizeof(int)) < 0) return 1;
 
-    int show_value = ems_show(out_fd,event_id);
-
-    struct Event* event = get_event_with_delay(event_id, event_list->head, event_list->tail);
-
-    size_t rows = event->rows;
-    size_t cols = event->cols;
-    size_t event_size = rows * cols;
+      return 0;
     
-    char response_message[sizeof(int) + sizeof(size_t) + sizeof(size_t) + event_size];
+    // reserve
+    case 4:
+      unsigned int event_id;
+      size_t num_seats;
+      size_t* xs;
+      size_t* ys;
 
-    memset(response_message,'\0', sizeof(response_message));
+      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
+      read(request_pipe,&num_seats,sizeof(size_t)) < 0 || 
+      read(request_pipe,&xs,sizeof(size_t*)) < 0 || read(request_pipe,&ys,sizeof(size_t*)) < 0)  return 1;
 
-    memcpy(response_message,show_value,sizeof(int));
-    memcpy(response_message + sizeof(int),rows,sizeof(size_t));
-    memcpy(response_message + sizeof(int) + sizeof(size_t),cols,sizeof(size_t));
-    memcpy(response_message + sizeof(int) + sizeof(size_t) + sizeof(size_t),event->data,event_size);
+      int reserve_value = ems_reserve(event_id,num_seats,xs,ys);
+      
+      if(write(response_pipe,&reserve_value,sizeof(int)) < 0) return 1;
 
-    if(write(response_pipe,response_message,sizeof(response_message)) < 0) return 1;
 
-    return 0;
+      return 0;
+
+    // show
+    case 5:
+
+      unsigned int event_id;
+
+      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0) return 1;
+
+
+      int show_value = 0;
+      struct Event* event = get_event_with_delay(event_id, event_list->head, event_list->tail);
+
+      if(event == NULL){
+        show_value = 1;
+      }
+      
+      size_t rows = event->rows;
+      size_t cols = event->cols;
+      size_t event_size = rows * cols;
+      
+      char *response_message = malloc(sizeof(int) + sizeof(size_t) + sizeof(size_t) + event_size * sizeof(unsigned int));
+
+      memset(response_message,'\0', sizeof(response_message));
+
+      memcpy(response_message,show_value,sizeof(int));
+      memcpy(response_message + sizeof(int),rows,sizeof(size_t));
+      memcpy(response_message + sizeof(int) + sizeof(size_t),cols,sizeof(size_t));
+      memcpy(response_message + sizeof(int) + sizeof(size_t) + sizeof(size_t),event->data,event_size);
+
+      if(write(response_pipe,response_message,sizeof(response_message)) < 0) return 1;
+
+      free(response_message);
+      return 0;
+
+    // list
+    case 6:
+      int list_value = 0;
+      int n_events = 0;
+      
+      if(event_list == NULL){
+        return 1;
+      }
+
+      unsigned int id[16];
+
+      struct ListNode* to = event_list->tail;
+      struct ListNode* current = event_list->head;
+
+      while (1) {
+
+        sprintf(id, "%u", (current->event)->id);
+        n_events++;
+
+        if (current == to) {
+          break;
+        }
+
+        current = current->next;
+      }
+
+      char *response_message = malloc(sizeof(int) + sizeof(int) + n_events * sizeof(unsigned int));
+
+      memset(response_message,'\0', sizeof(response_message));
+
+      memcpy(response_message,list_value,sizeof(int));
+      memcpy(response_message + sizeof(int),n_events,sizeof(int));
+      memcpy(response_message + sizeof(int) + sizeof(int),id,n_events);
+
+      if(write(response_pipe,response_message,sizeof(response_message)) < 0) return 1;
+
+      free(response_message);
+      return 0;
+
   }
-
+  return 1;
 }
 
 
@@ -140,13 +192,10 @@ int main(int argc, char* argv[]) {
     //TODO: Write new client to the producer-consumer buffer
     enum Command* code;
     int resp_pipe, req_pipe;
-    int bytesread;
-    
-    bytesread = read(register_pipe,&code,1);
 
-    if(bytesread = read(register_pipe,&code,1)) break;
+    if(read(register_pipe,&code,1)) break;
 
-    if(code == 9){   
+    if(code == 0){   
       if(session_request(register_pipe)){
         fprintf(stderr,"Failed session request\n");
         return 1;
@@ -160,13 +209,13 @@ int main(int argc, char* argv[]) {
       write(resp_pipe,session.session_id,sizeof(int));
     }
 
-    if(bytesread = read(session.req_pipe_path,&code,sizeof(code)) <= 0) break;
+    if(read(req_pipe,&code,1) <= 0) break;
+
+    process_request(&code,req_pipe,resp_pipe);
 
     
 
-    
-
-
+  
   }
 
   //TODO: Close Server
