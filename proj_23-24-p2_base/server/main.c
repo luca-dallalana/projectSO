@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/types.h> 
 #include <sys/stat.h>
+#include <errno.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -15,6 +16,7 @@
 struct Session session;
 
 int session_request(int pipe){
+
 
     if(read(pipe,&session.req_pipe_path,MAX_PIPE_PATH_NAME) < 0 || read(pipe,&session.resp_pipe_path,MAX_PIPE_PATH_NAME) < 0){
       return 1;
@@ -55,7 +57,8 @@ int main(int argc, char* argv[]) {
   unlink(argv[1]);
   //TODO: Intialize server, create worker threads
 
-  if(mkfifo(argv[1],0777) < 0){
+  if(mkfifo(argv[1],0666) < 0){
+    printf("%s\n",strerror(errno));
     return 1;
   }
 
@@ -63,6 +66,7 @@ int main(int argc, char* argv[]) {
 
   int register_pipe;
   if((register_pipe = open(argv[1],O_RDONLY)) < 0){
+    unlink(argv[1]);
     return 1;
   }
 
@@ -88,7 +92,7 @@ int main(int argc, char* argv[]) {
       if(resp_pipe < 0 || req_pipe < 0){
         return 1;
       }
-      write(resp_pipe,session.session_id,sizeof(int));
+      write(resp_pipe,&session.session_id,sizeof(int));
     }
 
     if(read(req_pipe,&code,sizeof(int)) <= 0) break;
@@ -99,5 +103,6 @@ int main(int argc, char* argv[]) {
 
   //TODO: Close Server
   close(register_pipe);
+  unlink(argv[1]);
   ems_terminate();
 }

@@ -20,12 +20,16 @@ int resp_pipe;
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
 
   //TODO: create pipes and connect to the server
-
+  printf("%s\n",server_pipe_path);
   unlink(req_pipe_path);
   unlink(resp_pipe_path);
 
   int server_pipe;
-  if((server_pipe = open(server_pipe_path,O_WRONLY) )< 0){
+  if((server_pipe = open(server_pipe_path,O_WRONLY))< 0){
+    
+    printf("%s\n",server_pipe_path);
+    printf("foi o server\n");
+    unlink(server_pipe_path);
     return 1;
   }
 
@@ -39,9 +43,14 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   memcpy(request_message + 1 + MAX_PIPE_PATH_NAME, resp_pipe_path, MAX_PIPE_PATH_NAME);
 
   // requests session
-  if(write(server_pipe,request_message,MAX_REQUEST_MESSAGE) < 0) return 1;
+  if(write(server_pipe,request_message,MAX_REQUEST_MESSAGE) < 0){
+    printf("foi o write message\n");
+    return 1;
 
-  if(mkfifo(req_pipe_path,0777) < 0 || mkfifo(resp_pipe_path,0777) < 0){
+
+  } 
+
+  if(mkfifo(req_pipe_path,0666) < 0 || mkfifo(resp_pipe_path,0666) < 0){
     return 1;
   }
 
@@ -56,16 +65,19 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   }
   
   int session_id;
-  read(resp_pipe, &session_id, sizeof(int));
+  if(read(resp_pipe, &session_id, sizeof(int)) < 0){
+    unlink(req_pipe_path);
+    unlink(resp_pipe_path);
+    close(server_pipe);
+    close(req_pipe);
+    close(resp_pipe);
+    return 1;
+
+  }
 
   cur_session_id = session_id;
+  return 0;
 
-  unlink(req_pipe_path);
-  unlink(resp_pipe_path);
-  close(server_pipe);
-  close(req_pipe);
-  close(resp_pipe);
-  return 1;
 }
 
 int ems_quit(void) { 
