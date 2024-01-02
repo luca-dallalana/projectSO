@@ -4,8 +4,6 @@
 #include <stddef.h>
 
 enum Command {
-  CMD_REQUEST,
-  CMD_QUIT,
   CMD_CREATE,
   CMD_RESERVE,
   CMD_SHOW,
@@ -16,7 +14,6 @@ enum Command {
   CMD_INVALID,
   EOC  // End of commands
 };
-
 /// Reads a line and returns the corresponding command.
 /// @param fd File descriptor to read from.
 /// @return The command read.

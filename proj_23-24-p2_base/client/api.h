@@ -4,9 +4,7 @@
 #include <stddef.h>
 
 
-int cur_session_id;
-int req_pipe;
-int resp_pipe;
+
 
 /// Connects to an EMS server.
 /// @param req_pipe_path Path to the name pipe to be created for requests.

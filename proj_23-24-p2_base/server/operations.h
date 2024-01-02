@@ -38,4 +38,5 @@ int ems_show(int out_fd, unsigned int event_id);
 int ems_list_events(int out_fd);
 
 
+int process_request(int code, int request_pipe, int response_pipe);
 #endif  // SERVER_OPERATIONS_H
