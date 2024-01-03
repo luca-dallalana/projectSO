@@ -288,8 +288,8 @@ int ems_list_events(int out_fd) {
 
 
 int process_request(int code, int request_pipe, int response_pipe){
-  unsigned int event_id;
   char *response_message;
+  unsigned int event_id;
 
   switch (code){
 
@@ -298,30 +298,57 @@ int process_request(int code, int request_pipe, int response_pipe){
       size_t num_rows;
       size_t num_cols;
 
-      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
-      read(request_pipe,&num_rows,sizeof(size_t)) < 0 || 
-      read(request_pipe,&num_cols,sizeof(size_t)) < 0) return 1;
+      if(read(request_pipe,&event_id,sizeof(unsigned int)) <= 0 || 
+      read(request_pipe,&num_rows,sizeof(size_t)) <= 0 || 
+      read(request_pipe,&num_cols,sizeof(size_t)) <= 0) return 1;
 
 
       int create_value = ems_create(event_id,num_rows,num_cols);
-      if(write(response_pipe,&create_value,sizeof(int)) < 0) return 1;
+      if(write(response_pipe,&create_value,sizeof(int)) <= 0) return 1;
 
       return 0;
     
     // reserve
     case 4:
+      
 
       size_t num_seats;
       size_t* xs;
       size_t* ys;
 
-      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0 || 
-      read(request_pipe,&num_seats,sizeof(size_t)) < 0 || 
-      read(request_pipe,&xs,sizeof(size_t*)) < 0 || read(request_pipe,&ys,sizeof(size_t*)) < 0)  return 1;
+      if (read(request_pipe, &event_id, sizeof(unsigned int)) <= 0 || 
+      read(request_pipe, &num_seats, sizeof(size_t)) <= 0)  
+      {
+        return 1;
+      }
+
+      // Allocate memory for xs and ys
+      xs = malloc(num_seats * sizeof(size_t));
+      ys = malloc(num_seats * sizeof(size_t));
+
+      // Check if memory allocation is successful
+      if (xs == NULL || ys == NULL) {
+
+        free(xs);
+        free(ys);
+        return 1;
+      }
+
+      // Read data into allocated memory
+      if (read(request_pipe, xs, num_seats * sizeof(size_t)) <= 0 || 
+          read(request_pipe, ys, num_seats * sizeof(size_t)) <= 0){
+
+        free(xs);
+        free(ys);
+        return 1;
+      }
 
       int reserve_value = ems_reserve(event_id,num_seats,xs,ys);
+
+      free(xs);
+      free(ys);
       
-      if(write(response_pipe,&reserve_value,sizeof(int)) < 0) return 1;
+      if(write(response_pipe,&reserve_value,sizeof(int)) <= 0) return 1;
 
 
       return 0;
@@ -330,79 +357,102 @@ int process_request(int code, int request_pipe, int response_pipe){
     case 5:
 
 
-      if(read(request_pipe,&event_id,sizeof(unsigned int)) < 0) return 1;
-
+      if (read(request_pipe, &event_id, sizeof(unsigned int)) <= 0) {
+        return 1;
+      }
 
       int show_value = 0;
       struct Event* event = get_event_with_delay(event_id, event_list->head, event_list->tail);
 
-      if(event == NULL){
-        show_value = 1;
+      if (event == NULL) {
+          show_value = 1;
       }
-      
+
       size_t rows = event->rows;
       size_t cols = event->cols;
       size_t event_size = rows * cols;
-      
-      response_message = malloc(sizeof(int) + sizeof(size_t) + sizeof(size_t) + event_size * sizeof(unsigned int));
 
+    
+      size_t response_size = sizeof(int) + sizeof(size_t) + sizeof(size_t) + event_size * sizeof(unsigned int);
 
-      memcpy(response_message,&show_value,sizeof(int));
-      memcpy(response_message + sizeof(int),&rows,sizeof(size_t));
-      memcpy(response_message + sizeof(int) + sizeof(size_t),&cols,sizeof(size_t));
-      memcpy(response_message + sizeof(int) + sizeof(size_t) + sizeof(size_t),&event->data,event_size);
+      response_message = malloc(response_size);
 
-      if(write(response_pipe,response_message,sizeof(response_message)) < 0) return 1;
+      // Check if memory allocation is successful
+      if (response_message == NULL) {
+          return 1;
+      }
 
+      memcpy(response_message, &show_value, sizeof(int));
+      memcpy(response_message + sizeof(int), &rows, sizeof(size_t));
+      memcpy(response_message + sizeof(int) + sizeof(size_t), &cols, sizeof(size_t));
+      memcpy(response_message + sizeof(int) + sizeof(size_t) + sizeof(size_t), event->data, event_size);
+
+      // Write the response message to the pipe
+      if (write(response_pipe, response_message, response_size) <= 0) {
+          free(response_message);
+          return 1;
+      }
+
+      // Clean up allocated memory
       free(response_message);
       return 0;
+
 
     // list
     case 6:
       int list_value = 0;
       size_t n_events = 0;
-      
-      if(event_list == NULL){
-        return 1;
-      }
 
-   
+      if (event_list == NULL) {
+          return 1;
+      }
 
       struct ListNode* to = event_list->tail;
       struct ListNode* current = event_list->head;
 
-      unsigned int *id = NULL;
+      unsigned int* id = NULL;
       while (1) {
+          id = realloc(id, (n_events + 1) * sizeof(unsigned int));
 
-        id = realloc(id, (unsigned int)(n_events + 1) * sizeof(unsigned int));
+          if (id == NULL) {
+              fprintf(stderr, "Memory allocation failed\n");
+              return 1;
+          }
 
-        if (id == NULL) {
-            fprintf(stderr, "Memory allocation failed\n");
-            return 1;
-        }
+          id[n_events] = (current->event)->id;
+          n_events++;
 
-        id[n_events] = (current->event)->id;
-        n_events++;
+          if (current == to) {
+              break;
+          }
 
-        if (current == to) {
-          break;
-        }
-
-        current = current->next;
+          current = current->next;
       }
 
       response_message = malloc(sizeof(int) + sizeof(int) + n_events * sizeof(unsigned int));
 
-     
+      if (response_message == NULL) {
+          // Handle memory allocation failure
+          free(id);
+          return 1;
+      }
 
-      memcpy(response_message,&list_value,sizeof(int));
-      memcpy(response_message + sizeof(int),&n_events,sizeof(int));
-      memcpy(response_message + sizeof(int) + sizeof(int),&id,n_events);
+      memcpy(response_message, &list_value, sizeof(int));
+      memcpy(response_message + sizeof(int), &n_events, sizeof(int));
+      memcpy(response_message + sizeof(int) + sizeof(int), id, n_events * sizeof(unsigned int));
 
-      if(write(response_pipe,response_message,sizeof(response_message)) < 0) return 1;
+      // Use the correct size when writing to the response pipe
+      if (write(response_pipe, response_message, sizeof(int) + sizeof(int) + n_events * sizeof(unsigned int)) <= 0) {
+          free(response_message);
+          free(id);
+          return 1;
+      }
 
+
+      // Clean up allocated memory
       free(response_message);
       free(id);
+
       return 0;
 
   }
