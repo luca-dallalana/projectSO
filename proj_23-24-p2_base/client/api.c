@@ -25,11 +25,8 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   unlink(resp_pipe_path);
 
   int server_pipe;
-  if((server_pipe = open(server_pipe_path,O_WRONLY))< 0){
-    
-    unlink(server_pipe_path);
-    return 1;
-  }
+  if((server_pipe = open(server_pipe_path,O_WRONLY))< 0) return 1;
+
 
   int op_code = 0;
   char *request_message;
@@ -42,7 +39,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   strcpy(req_pipe_name,req_pipe_path);
   strcpy(resp_pipe_name,resp_pipe_path);
 
-  request_message = malloc(sizeof(int) + 2 * MAX_PIPE_PATH_NAME);
+  request_message = malloc(SETUP_REQUEST_LEN);
 
   memcpy(request_message,&op_code,sizeof(int));
   
@@ -56,7 +53,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   }
 
   // requests session
-  if(write(server_pipe,request_message,sizeof(int) + 2 * MAX_PIPE_PATH_NAME) < 0){
+  if(write(server_pipe,request_message,SETUP_REQUEST_LEN) < 0){
     free(request_message);
     return 1;
 
@@ -95,11 +92,11 @@ int ems_quit(void) {
   char *request_message;
   int op_code = 2;
 
-  request_message = malloc(sizeof(int));
+  request_message = malloc(QUIT_REQUEST_LEN);
 
   memcpy(request_message,&op_code,sizeof(int));
 
-  if(write(req_pipe,request_message,sizeof(int)) < 0) {
+  if(write(req_pipe,request_message,QUIT_REQUEST_LEN) < 0) {
     free(request_message);
     return 1;
   }
@@ -114,14 +111,14 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   char *request_message;
   int op_code = 3;
 
-  request_message = malloc(sizeof(int) + sizeof(int) + sizeof(size_t) + sizeof(size_t));
+  request_message = malloc(CREATE_REQUEST_LEN);
 
   memcpy(request_message,&op_code,sizeof(int));
   memcpy(request_message + sizeof(int),&event_id,sizeof(int));
   memcpy(request_message + sizeof(int) + sizeof(int),&num_rows,sizeof(size_t));
   memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t),&num_cols,sizeof(size_t));
 
-  if(write(req_pipe,request_message,sizeof(int) + sizeof(int) + sizeof(size_t) + sizeof(size_t)) <= 0){
+  if(write(req_pipe,request_message,CREATE_REQUEST_LEN) <= 0){
     free(request_message);
     return 1;
 
@@ -141,7 +138,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   char *request_message;
   int op_code = 4;
 
-  request_message = malloc(sizeof(int) + sizeof(int) + sizeof(size_t) + 2 * num_seats * sizeof(size_t));
+  request_message = malloc(RESERVE_REQUEST_LEN);
 
   memcpy(request_message,&op_code,sizeof(int));
   memcpy(request_message + sizeof(int),&event_id,sizeof(int));
@@ -149,7 +146,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t),xs,num_seats * sizeof(size_t));
   memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t) + num_seats * sizeof(size_t),ys,num_seats * sizeof(size_t));
 
-  if(write(req_pipe,request_message,sizeof(int) + sizeof(int) + sizeof(size_t) + 2 * num_seats * sizeof(size_t)) < 0){
+  if(write(req_pipe,request_message,RESERVE_REQUEST_LEN) < 0){
     free(request_message);
     return 1;
   } 
@@ -166,7 +163,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   int op_code = 5;
 
   // Allocate memory for the request message
-  request_message = malloc(sizeof(int) + sizeof(unsigned int));
+  request_message = malloc(SHOW_REQUEST_LEN);
 
   // Check if memory allocation is successful
   if (request_message == NULL) {
@@ -178,7 +175,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   memcpy(request_message + sizeof(int), &event_id, sizeof(unsigned int));
 
   // Write the request message to the pipe
-  if (write(req_pipe, request_message, sizeof(int) + sizeof(unsigned int)) < 0) {
+  if (write(req_pipe, request_message, SHOW_REQUEST_LEN) < 0) {
     free(request_message);
     return 1;
   }

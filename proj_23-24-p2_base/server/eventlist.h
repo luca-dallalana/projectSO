@@ -5,15 +5,6 @@
 #include <stddef.h>
 
 
-struct Session {
-  int active;
-  int session_id;
-  char req_pipe_path[40];
-  char resp_pipe_path[40];
-};
-
-
-
 
 struct Event {
   unsigned int id;            /// Event id
