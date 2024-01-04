@@ -7,11 +7,14 @@
 #include <sys/types.h> 
 #include <sys/stat.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "common/constants.h"
 #include "common/io.h"
 #include "operations.h"
 #include "eventlist.h"
+
+
 
 
 struct Queue{
@@ -143,8 +146,15 @@ void destroy_queue(struct Queue* queue){
 }
 
 void* read_session_request(){
-  while(1){
+  sigset_t set;
 
+  
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+
+  if(pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) return (void*)1;
+
+  while(1){
     int resp_pipe, req_pipe;
     struct Session* session = (struct Session*)remove_element(&pc_buffer);
 
@@ -181,6 +191,14 @@ void* read_session_request(){
   return (void*)0;
 }
 
+
+
+
+void sigusr1_handler(int sig){
+
+  ems_list_events(STDOUT_FILENO);
+
+}
 
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
@@ -230,9 +248,14 @@ int main(int argc, char* argv[]) {
   }
   int session_counter = 0;
   
+  signal(SIGUSR1, sigusr1_handler);
+
   while (1) {
     //TODO: Read from pipe
     //TODO: Write new client to the producer-consumer buffer
+
+
+
     int code;
     if(read(register_pipe,&code,sizeof(int)) < 0) break;
 

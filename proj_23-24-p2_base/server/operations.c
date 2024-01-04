@@ -274,6 +274,9 @@ int ems_list_events(int out_fd) {
       return 1;
     }
 
+
+    if(ems_show(out_fd,(current->event)->id)) break;
+    
     if (current == to) {
       break;
     }
