@@ -70,6 +70,7 @@ int create_queue(struct Queue* queue){
 
 int add_element(struct Queue* queue, void* element){
 
+
     pthread_mutex_lock(&queue->add_to_queue_lock);
     pthread_mutex_lock(&queue->size_lock);
 
@@ -182,12 +183,15 @@ void* read_session_request(){
 
     free(response_message);
 
+
     while (1) {
-      int op_code;
+      char op_code[OP_CODE_LEN];
 
-      if(read(req_pipe,&op_code,sizeof(int)) <= 0) break;
 
-      if(process_request(op_code,req_pipe,resp_pipe)){
+      if(read(req_pipe,&op_code,OP_CODE_LEN) <= 0) break;
+
+      int code = get_code(op_code);
+      if(process_request(code,req_pipe,resp_pipe)){
         close(resp_pipe);
         close(req_pipe);
         unlink(session->req_pipe_path);
@@ -196,8 +200,6 @@ void* read_session_request(){
       } 
 
     }
-    close(resp_pipe);
-    close(req_pipe);
     unlink(session->req_pipe_path);
     unlink(session->resp_pipe_path);
 
@@ -274,12 +276,16 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    int code;
-    if(read(register_pipe,&code,sizeof(int)) < 0) break;
+    char op_code[OP_CODE_LEN];
 
 
-    if(code == 0){   
+    if(read(register_pipe,&op_code,OP_CODE_LEN) < 0) break;
 
+    int code = get_code(op_code);
+   
+
+    if(code == 1){   
+  
       struct Session* session = malloc(sizeof(struct Session));
       
       read(register_pipe,&session->req_pipe_path,MAX_PIPE_PATH_NAME);
@@ -288,9 +294,11 @@ int main(int argc, char* argv[]) {
       session -> session_id = session_counter++;
 
       add_element(&pc_buffer,session);
+      
    
       
     }
+   
     close(register_pipe);
 
   }

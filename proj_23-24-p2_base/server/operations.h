@@ -38,6 +38,7 @@ int ems_show(int out_fd, unsigned int event_id);
 /// @return 0 if the events were printed successfully, 1 otherwise.
 int ems_list_events(int out_fd);
 
+int get_code(char *op_code);
 
 int process_request(int code, int request_pipe, int response_pipe);
 #endif  // SERVER_OPERATIONS_H

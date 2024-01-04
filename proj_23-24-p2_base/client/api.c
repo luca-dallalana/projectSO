@@ -27,8 +27,6 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
   if((server_pipe = open(server_pipe_path,O_WRONLY))< 0) return 1;
 
-
-  int op_code = 0;
   char *request_message;
   char req_pipe_name[MAX_PIPE_PATH_NAME];
   char resp_pipe_name[MAX_PIPE_PATH_NAME];
@@ -41,10 +39,10 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
   request_message = malloc(SETUP_REQUEST_LEN);
 
-  memcpy(request_message,&op_code,sizeof(int));
+  memcpy(request_message,"OP_CODE=1",OP_CODE_LEN);
   
-  memcpy(request_message + sizeof(int), req_pipe_name,MAX_PIPE_PATH_NAME);
-  memcpy(request_message + sizeof(int) + MAX_PIPE_PATH_NAME, resp_pipe_name, MAX_PIPE_PATH_NAME);
+  memcpy(request_message + OP_CODE_LEN, req_pipe_name,MAX_PIPE_PATH_NAME);
+  memcpy(request_message + OP_CODE_LEN + MAX_PIPE_PATH_NAME, resp_pipe_name, MAX_PIPE_PATH_NAME);
 
   
   if(mkfifo(req_pipe_path,0666) < 0 || mkfifo(resp_pipe_path,0666) < 0){
@@ -91,11 +89,11 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 int ems_quit(void) { 
   //TODO: close pipes
   char *request_message;
-  int op_code = 2;
+
 
   request_message = malloc(QUIT_REQUEST_LEN);
 
-  memcpy(request_message,&op_code,sizeof(int));
+  memcpy(request_message,"OP_CODE=2",OP_CODE_LEN);
 
   if(write(req_pipe,request_message,QUIT_REQUEST_LEN) < 0) {
     free(request_message);
@@ -110,14 +108,14 @@ int ems_quit(void) {
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
   char *request_message;
-  int op_code = 3;
+
 
   request_message = malloc(CREATE_REQUEST_LEN);
 
-  memcpy(request_message,&op_code,sizeof(int));
-  memcpy(request_message + sizeof(int),&event_id,sizeof(int));
-  memcpy(request_message + sizeof(int) + sizeof(int),&num_rows,sizeof(size_t));
-  memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t),&num_cols,sizeof(size_t));
+  memcpy(request_message,"OP_CODE=3",OP_CODE_LEN);
+  memcpy(request_message + OP_CODE_LEN,&event_id,EVENT_ID_LEN);
+  memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN,&num_rows,ROW_COL_LEN);
+  memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN + ROW_COL_LEN,&num_cols,ROW_COL_LEN);
 
   if(write(req_pipe,request_message,CREATE_REQUEST_LEN) <= 0){
     free(request_message);
@@ -137,15 +135,15 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   //TODO: send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
 
   char *request_message;
-  int op_code = 4;
+
 
   request_message = malloc(RESERVE_REQUEST_LEN);
 
-  memcpy(request_message,&op_code,sizeof(int));
-  memcpy(request_message + sizeof(int),&event_id,sizeof(int));
-  memcpy(request_message + sizeof(int) + sizeof(int),&num_seats,sizeof(size_t));
-  memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t),xs,num_seats * sizeof(size_t));
-  memcpy(request_message + sizeof(int) + sizeof(int) + sizeof(size_t) + num_seats * sizeof(size_t),ys,num_seats * sizeof(size_t));
+  memcpy(request_message,"OP_CODE=4",OP_CODE_LEN);
+  memcpy(request_message + OP_CODE_LEN,&event_id,EVENT_ID_LEN);
+  memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN,&num_seats,SEATS_LEN);
+  memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN+ SEATS_LEN,xs,num_seats * SEATS_LEN);
+  memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN + SEATS_LEN + num_seats * SEATS_LEN,ys,num_seats * SEATS_LEN);
 
   if(write(req_pipe,request_message,RESERVE_REQUEST_LEN) < 0){
     free(request_message);
@@ -161,7 +159,6 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
 int ems_show(int out_fd, unsigned int event_id) {
   char *request_message;
-  int op_code = 5;
 
   // Allocate memory for the request message
   request_message = malloc(SHOW_REQUEST_LEN);
@@ -172,8 +169,8 @@ int ems_show(int out_fd, unsigned int event_id) {
   }
 
   // Initialize the allocated memory
-  memcpy(request_message, &op_code, sizeof(int));
-  memcpy(request_message + sizeof(int), &event_id, sizeof(unsigned int));
+  memcpy(request_message, "OP_CODE=5", OP_CODE_LEN);
+  memcpy(request_message + OP_CODE_LEN, &event_id, EVENT_ID_LEN);
 
   // Write the request message to the pipe
   if (write(req_pipe, request_message, SHOW_REQUEST_LEN) < 0) {
@@ -189,8 +186,8 @@ int ems_show(int out_fd, unsigned int event_id) {
 
   // Read the response from the pipe
   if (read(resp_pipe, &success, sizeof(int)) <= 0 || 
-      read(resp_pipe, &rows, sizeof(size_t)) <= 0 || 
-      read(resp_pipe, &cols, sizeof(size_t)) <= 0) {
+      read(resp_pipe, &rows, ROW_COL_LEN) <= 0 || 
+      read(resp_pipe, &cols, ROW_COL_LEN) <= 0) {
     return 1;
   }
 
@@ -231,10 +228,10 @@ int ems_show(int out_fd, unsigned int event_id) {
 
 int ems_list_events(int out_fd) {
   char *request_message;
-  int op_code = 6;
+  
 
   // Allocate memory for the request message
-  request_message = malloc(sizeof(int));
+  request_message = malloc(LIST_REQUEST_LEN);
 
   // Check if memory allocation is successful
   if (request_message == NULL) {
@@ -242,10 +239,10 @@ int ems_list_events(int out_fd) {
   }
 
   // Initialize the allocated memory
-  memcpy(request_message, &op_code, sizeof(int));
+  memcpy(request_message, "OP_CODE=6", OP_CODE_LEN);
 
   // Write the request message to the pipe
-  if (write(req_pipe, request_message, sizeof(int)) < 0) {
+  if (write(req_pipe, request_message, LIST_REQUEST_LEN) < 0) {
     free(request_message);
     return 1;
   }
