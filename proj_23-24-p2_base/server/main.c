@@ -200,6 +200,7 @@ void sigusr1_handler(int sig){
 
 }
 
+
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -224,6 +225,8 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  printf("%d\n",getpid());
+
   unlink(argv[1]);
   //TODO: Intialize server, create worker threads
 
@@ -241,6 +244,8 @@ int main(int argc, char* argv[]) {
 
   pthread_t thread_list[MAX_SESSION_COUNT];
 
+  signal(SIGUSR1, sigusr1_handler);
+
   for(int i = 0; i < MAX_SESSION_COUNT; i++){
     if(pthread_create(&thread_list[i],NULL,read_session_request,NULL) != 0){
       return 1;
@@ -248,7 +253,6 @@ int main(int argc, char* argv[]) {
   }
   int session_counter = 0;
   
-  signal(SIGUSR1, sigusr1_handler);
 
   while (1) {
     //TODO: Read from pipe

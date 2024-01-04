@@ -74,15 +74,16 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   
 
   if(read(resp_pipe, &cur_session_id, sizeof(int)) <= 0){
+    close(req_pipe);
+    close(resp_pipe);
     unlink(req_pipe_path);
     unlink(resp_pipe_path);
     close(server_pipe);
-    close(req_pipe);
-    close(resp_pipe);
     return 1;
 
   }
 
+  close(server_pipe);
   return 0;
 
 }
@@ -103,7 +104,6 @@ int ems_quit(void) {
   free(request_message);
   close(req_pipe);
   close(resp_pipe);
-  close(server_pipe);
   return 0;
 }
 
