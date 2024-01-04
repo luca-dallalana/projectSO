@@ -119,8 +119,7 @@ int main(int argc, char* argv[]) {
         close(in_fd);
         close(out_fd);
         ems_quit();
-        unlink(argv[1]);
-        unlink(argv[2]);
+       
         return 0;
     }
   }

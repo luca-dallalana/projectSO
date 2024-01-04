@@ -104,6 +104,7 @@ int add_element(struct Queue* queue, void* element){
 }
 
 void* remove_element(struct Queue* queue){
+
     pthread_mutex_lock(&queue->remove_from_queue_lock);
     pthread_mutex_lock(&queue->size_lock);
 
@@ -157,7 +158,7 @@ void* read_session_request(){
   while(1){
     int resp_pipe, req_pipe;
     struct Session* session = (struct Session*)remove_element(&pc_buffer);
-
+  
     req_pipe = open(session->req_pipe_path, O_RDONLY);
     resp_pipe = open(session->resp_pipe_path,O_WRONLY);
 
@@ -171,7 +172,11 @@ void* read_session_request(){
     response_message = malloc(sizeof(int));
     memcpy(response_message,&session->session_id,sizeof(int));
 
-    if(write(resp_pipe,response_message,sizeof(int)) <= 0){
+    if(write(resp_pipe,response_message,sizeof(int)) < 0){
+      close(resp_pipe);
+      close(req_pipe);
+      unlink(session->req_pipe_path);
+      unlink(session->resp_pipe_path);
       return (void*)1;
     }
 
@@ -182,11 +187,20 @@ void* read_session_request(){
 
       if(read(req_pipe,&op_code,sizeof(int)) <= 0) break;
 
-      if(process_request(op_code,req_pipe,resp_pipe)) break;
+      if(process_request(op_code,req_pipe,resp_pipe)){
+        close(resp_pipe);
+        close(req_pipe);
+        unlink(session->req_pipe_path);
+        unlink(session->resp_pipe_path);
+        return (void*)1;
+      } 
 
     }
     close(resp_pipe);
     close(req_pipe);
+    unlink(session->req_pipe_path);
+    unlink(session->resp_pipe_path);
+
   }
   return (void*)0;
 }
@@ -232,11 +246,6 @@ int main(int argc, char* argv[]) {
 
   if(mkfifo(argv[1],0666) < 0) return 1;
 
-  int register_pipe;
-  if((register_pipe = open(argv[1],O_RDONLY)) < 0){
-    unlink(argv[1]);
-    return 1;
-  }
 
 
 
@@ -251,6 +260,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+  
   int session_counter = 0;
   
 
@@ -258,7 +268,11 @@ int main(int argc, char* argv[]) {
     //TODO: Read from pipe
     //TODO: Write new client to the producer-consumer buffer
 
-
+    int register_pipe;
+    if((register_pipe = open(argv[1],O_RDONLY)) < 0){
+      unlink(argv[1]);
+      return 1;
+    }
 
     int code;
     if(read(register_pipe,&code,sizeof(int)) < 0) break;
@@ -273,20 +287,17 @@ int main(int argc, char* argv[]) {
 
       session -> session_id = session_counter++;
 
-      if(add_element(&pc_buffer,session)){
-        free(session);
-        break;
-      } 
-
+      add_element(&pc_buffer,session);
+   
+      
     }
+    close(register_pipe);
 
-    
   }
 
   //TODO: Close Server
   destroy_queue(&pc_buffer);
-  close(register_pipe);
-  unlink(argv[1]);
   ems_terminate();
+  unlink(argv[1]);
   return 0;
 }
