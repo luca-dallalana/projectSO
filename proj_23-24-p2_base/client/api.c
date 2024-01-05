@@ -22,6 +22,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
   //TODO: create pipes and connect to the server
   
+  // 
   unlink(req_pipe_path);
   unlink(resp_pipe_path);
 
