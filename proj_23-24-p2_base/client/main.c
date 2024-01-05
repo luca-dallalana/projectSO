@@ -10,17 +10,18 @@
 #include "parser.h"
 
 int main(int argc, char* argv[]) {
+  // if there are insuficient arguments
   if (argc < 5) {
     fprintf(stderr, "Usage: %s <request pipe path> <response pipe path> <server pipe path> <.jobs file path>\n", argv[0]);
     return 1;
   }
   
-
+  // initializes ems
   if (ems_setup(argv[1], argv[2], argv[3])) {
     fprintf(stderr, "Failed to set up EMS\n");
     return 1;
   }
-
+  // searches for the last occurence of the '.' char
   const char* dot = strrchr(argv[4], '.');
   if (dot == NULL || dot == argv[4] || strlen(dot) != 5 || strcmp(dot, ".jobs") ||
       strlen(argv[4]) > MAX_JOB_FILE_NAME_SIZE) {
@@ -28,16 +29,19 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  // creates the .out path
   char out_path[MAX_JOB_FILE_NAME_SIZE];
   strcpy(out_path, argv[4]);
   strcpy(strrchr(out_path, '.'), ".out");
   
+  // opens the input fd
   int in_fd = open(argv[4], O_RDONLY);
   if (in_fd == -1) {
     fprintf(stderr, "Failed to open input file. Path: %s\n", argv[4]);
     return 1;
   }
 
+  // opens the output fd
   int out_fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
   if (out_fd == -1) {
     fprintf(stderr, "Failed to open output file. Path: %s\n", out_path);
