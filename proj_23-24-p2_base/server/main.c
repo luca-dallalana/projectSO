@@ -14,8 +14,10 @@
 #include "operations.h"
 #include "eventlist.h"
 
+
+
+
 struct Queue{
-    pthread_rwlock_t buffer_lock;
     void** queue_buffer;
 
     pthread_mutex_t size_lock;
@@ -26,6 +28,7 @@ struct Queue{
 
     pthread_mutex_t remove_from_queue_lock;
     pthread_cond_t remove_from_queue_condvar;
+
     
 };
 struct Session {
@@ -41,11 +44,6 @@ int create_queue(struct Queue* queue){
     void** buffer = malloc(MAX_SESSION_COUNT * sizeof(void*));
 
     if(buffer == NULL){
-      fprintf(stderr,"Error allocating memory for queue\n");
-      return 1;
-    }
-
-    if(buffer == NULL){
         printf("Failed to allocate memory for buffer\n");
         return 1;
     }
@@ -53,17 +51,10 @@ int create_queue(struct Queue* queue){
     queue->queue_buffer = buffer;
     queue->queue_size = 0;
 
-    if(pthread_rwlock_init(&queue->buffer_lock,NULL) != 0){
-      fprintf(stderr, "Failed to initialize queue buffer lock\n");
-        free(queue->queue_buffer);
-        return 1;
-    }
-
     if(pthread_mutex_init(&queue->size_lock,NULL) != 0 || 
     pthread_mutex_init(&queue->add_to_queue_lock,NULL) != 0 || 
     pthread_mutex_init(&queue->remove_from_queue_lock,NULL) != 0){
 
-        fprintf(stderr, "Failed to initialize queue mutex\n");
         free(queue->queue_buffer);
         return 1;
     }
@@ -71,7 +62,6 @@ int create_queue(struct Queue* queue){
     if(pthread_cond_init(&queue->add_to_queue_condvar,NULL) != 0 || 
     pthread_cond_init(&queue->remove_from_queue_condvar,NULL) != 0){
 
-        fprintf(stderr, "Failed to initialize queue conditional variables\n");
         free(queue->queue_buffer);
         return 1;
     }
@@ -92,32 +82,30 @@ int add_element(struct Queue* queue, void* element){
 
 
 
-    pthread_rwlock_wrlock(&queue->buffer_lock);
     pthread_mutex_unlock(&queue->add_to_queue_lock);
 
-
     // Find an empty spot in the queue_buffer
+
     for (int i = 0; i < MAX_SESSION_COUNT; ++i) {
         if (queue->queue_buffer[i] == NULL) {
             // Add the element to the found index
             queue->queue_buffer[i] = element;
-            ++queue->queue_size;
             break;
         }
     }
 
 
+    ++queue->queue_size;
+
     // Signal that an element has been added
-    
     pthread_cond_broadcast(&queue->remove_from_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
-    pthread_rwlock_unlock(&queue->buffer_lock);
 
     return 0;
 }
 
 void* remove_element(struct Queue* queue){
-  
+
     pthread_mutex_lock(&queue->remove_from_queue_lock);
     pthread_mutex_lock(&queue->size_lock);
 
@@ -127,15 +115,12 @@ void* remove_element(struct Queue* queue){
         pthread_mutex_lock(&queue->size_lock);
     }
 
-    pthread_rwlock_wrlock(&queue->buffer_lock);
     pthread_mutex_unlock(&queue->remove_from_queue_lock);
-
     void* element;
     for (int i = 0; i < MAX_SESSION_COUNT; ++i) {
         if (queue->queue_buffer[i] != NULL) {
             element = queue->queue_buffer[i];
             queue->queue_buffer[i] = NULL;
-            
             --queue->queue_size;
             break;
             
@@ -144,15 +129,12 @@ void* remove_element(struct Queue* queue){
 
     pthread_cond_broadcast(&queue->add_to_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
-    pthread_rwlock_unlock(&queue->buffer_lock);
     return element;
 
 }
 
-
 void destroy_queue(struct Queue* queue){
 
-    pthread_rwlock_destroy(&queue->buffer_lock);
     free(queue -> queue_buffer);
 
     pthread_mutex_destroy(&queue->size_lock);
@@ -189,15 +171,6 @@ void* read_session_request(){
     char *response_message;
 
     response_message = malloc(sizeof(int));
-
-    if(response_message == NULL){
-      close(resp_pipe);
-      close(req_pipe);
-      unlink(session->req_pipe_path);
-      unlink(session->resp_pipe_path);
-      return (void*)1;
-    }
-
     memcpy(response_message,&session->session_id,sizeof(int));
 
     if(write(resp_pipe,response_message,sizeof(int)) < 0){
@@ -239,9 +212,7 @@ void* read_session_request(){
 
 void sigusr1_handler(int sig){
 
-  if(ems_list_events(STDOUT_FILENO)){
-    fprintf(stderr,"Failed to show events\n");
-  }
+  ems_list_events(STDOUT_FILENO);
 
 }
 
@@ -270,14 +241,14 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  unlink(argv[1]);
+  printf("%d\n",getpid());
 
-  // creates register pipe
-  if(mkfifo(argv[1],0666) < 0){
-    fprintf(stderr,"Failed to create register pipe\n");
-    ems_terminate();
-    return 1;
-  } 
+  unlink(argv[1]);
+  //TODO: Intialize server, create worker threads
+
+  if(mkfifo(argv[1],0666) < 0) return 1;
+
+
 
 
   if(create_queue(&pc_buffer)) return 1;
@@ -288,9 +259,6 @@ int main(int argc, char* argv[]) {
 
   for(int i = 0; i < MAX_SESSION_COUNT; i++){
     if(pthread_create(&thread_list[i],NULL,read_session_request,NULL) != 0){
-      fprintf(stderr,"Failed to create thread\n");
-      destroy_queue(&pc_buffer);
-      ems_terminate();
       return 1;
     }
   }
@@ -304,9 +272,6 @@ int main(int argc, char* argv[]) {
 
     int register_pipe;
     if((register_pipe = open(argv[1],O_RDONLY)) < 0){
-      fprintf(stderr,"Failed to open register pipe\n");
-      destroy_queue(&pc_buffer);
-      ems_terminate();
       unlink(argv[1]);
       return 1;
     }
@@ -314,31 +279,24 @@ int main(int argc, char* argv[]) {
     char op_code[OP_CODE_LEN];
 
 
-    if(read(register_pipe,&op_code,OP_CODE_LEN) <= 0) break;
+    if(read(register_pipe,&op_code,OP_CODE_LEN) < 0) break;
 
     int code = get_code(op_code);
    
 
     if(code == 1){   
+  
       struct Session* session = malloc(sizeof(struct Session));
-
-      if(session == NULL){
-        fprintf(stderr,"Error allocating memory for session\n");
-        close(register_pipe);
-        break;
-      }
       
-      if(read(register_pipe,&session->req_pipe_path,MAX_PIPE_PATH_NAME) <= 0 ||
-      read(register_pipe,&session->resp_pipe_path,MAX_PIPE_PATH_NAME) <= 0){
-        close(register_pipe);
-        break;
-      }
+      read(register_pipe,&session->req_pipe_path,MAX_PIPE_PATH_NAME);
+      read(register_pipe,&session->resp_pipe_path,MAX_PIPE_PATH_NAME);
 
       session -> session_id = session_counter++;
 
       add_element(&pc_buffer,session);
+      
    
-           
+      
     }
    
     close(register_pipe);
