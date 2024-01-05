@@ -18,6 +18,8 @@
 
 
 struct Queue{
+
+    pthread_mutex_t buffer_lock;
     void** queue_buffer;
 
     pthread_mutex_t size_lock;
@@ -51,7 +53,7 @@ int create_queue(struct Queue* queue){
     queue->queue_buffer = buffer;
     queue->queue_size = 0;
 
-    if(pthread_mutex_init(&queue->size_lock,NULL) != 0 || 
+    if(pthread_mutex_init(&queue->buffer_lock,NULL) != 0 || pthread_mutex_init(&queue->size_lock,NULL) != 0 || 
     pthread_mutex_init(&queue->add_to_queue_lock,NULL) != 0 || 
     pthread_mutex_init(&queue->remove_from_queue_lock,NULL) != 0){
 
@@ -81,7 +83,7 @@ int add_element(struct Queue* queue, void* element){
     }
 
 
-
+    pthread_mutex_lock(&queue->buffer_lock);
     pthread_mutex_unlock(&queue->add_to_queue_lock);
 
     // Find an empty spot in the queue_buffer
@@ -90,16 +92,17 @@ int add_element(struct Queue* queue, void* element){
         if (queue->queue_buffer[i] == NULL) {
             // Add the element to the found index
             queue->queue_buffer[i] = element;
+            ++queue->queue_size;
             break;
         }
     }
 
 
-    ++queue->queue_size;
 
     // Signal that an element has been added
     pthread_cond_broadcast(&queue->remove_from_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
+    pthread_mutex_unlock(&queue->buffer_lock);
 
     return 0;
 }
@@ -115,6 +118,7 @@ void* remove_element(struct Queue* queue){
         pthread_mutex_lock(&queue->size_lock);
     }
 
+    pthread_mutex_lock(&queue->buffer_lock);
     pthread_mutex_unlock(&queue->remove_from_queue_lock);
     void* element;
     for (int i = 0; i < MAX_SESSION_COUNT; ++i) {
@@ -129,12 +133,13 @@ void* remove_element(struct Queue* queue){
 
     pthread_cond_broadcast(&queue->add_to_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
+    pthread_mutex_unlock(&queue->buffer_lock);
     return element;
 
 }
 
 void destroy_queue(struct Queue* queue){
-
+    pthread_mutex_destroy(&queue->buffer_lock);
     free(queue -> queue_buffer);
 
     pthread_mutex_destroy(&queue->size_lock);
