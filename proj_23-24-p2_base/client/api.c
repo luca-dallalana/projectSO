@@ -18,34 +18,38 @@ int req_pipe;
 int resp_pipe;
 int server_pipe;
 
-int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
 
-  //TODO: create pipes and connect to the server
+// create pipes and connect to the server
+int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   
-  // 
+  // unlinks the pipes to make sure there are no current connections
   unlink(req_pipe_path);
   unlink(resp_pipe_path);
 
+  // opens the pipe that connects client to server 
   if((server_pipe = open(server_pipe_path,O_WRONLY))< 0) return 1;
 
+  // defines the variables used to request and get an answer from the server
   char *request_message;
   char req_pipe_name[MAX_PIPE_PATH_NAME];
   char resp_pipe_name[MAX_PIPE_PATH_NAME];
 
+  // initializes both pipe names with \0 
   memset(req_pipe_name,'\0',MAX_PIPE_PATH_NAME);
   memset(resp_pipe_name,'\0',MAX_PIPE_PATH_NAME);
 
+  // passes the path given to the pipe name
   strcpy(req_pipe_name,req_pipe_path);
   strcpy(resp_pipe_name,resp_pipe_path);
 
   request_message = malloc(SETUP_REQUEST_LEN);
 
+  // creates the request message
   memcpy(request_message,"OP_CODE=1",OP_CODE_LEN);
-  
   memcpy(request_message + OP_CODE_LEN, req_pipe_name,MAX_PIPE_PATH_NAME);
   memcpy(request_message + OP_CODE_LEN + MAX_PIPE_PATH_NAME, resp_pipe_name, MAX_PIPE_PATH_NAME);
 
-  
+  // creates both pipes 
   if(mkfifo(req_pipe_path,0666) < 0 || mkfifo(resp_pipe_path,0666) < 0){
     free(request_message);
     return 1;
@@ -60,9 +64,11 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
   free(request_message);
 
+  //opens the request pipe and the response pipe 
   req_pipe = open(req_pipe_path, O_WRONLY);
   resp_pipe = open(resp_pipe_path, O_RDONLY);
 
+  // if there are any errors on the pipe opening OTIMIZACAO POSSIVEL
   if(req_pipe < 0 || resp_pipe < 0){
     unlink(req_pipe_path);
     unlink(resp_pipe_path);
@@ -71,7 +77,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   }
 
   
-
+  // reads the current session id from the response pipe
   if(read(resp_pipe, &cur_session_id, sizeof(int)) <= 0){
     close(req_pipe);
     close(resp_pipe);
@@ -79,7 +85,6 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
     unlink(resp_pipe_path);
     close(server_pipe);
     return 1;
-
   }
 
   close(server_pipe);
@@ -87,15 +92,16 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
 }
 
+// close pipes
 int ems_quit(void) { 
-  //TODO: close pipes
   char *request_message;
-
 
   request_message = malloc(QUIT_REQUEST_LEN);
 
+  // creates the request message
   memcpy(request_message,"OP_CODE=2",OP_CODE_LEN);
 
+  // sends the request
   if(write(req_pipe,request_message,QUIT_REQUEST_LEN) < 0) {
     free(request_message);
     return 1;
@@ -106,46 +112,49 @@ int ems_quit(void) {
   return 0;
 }
 
+// send create request to the server (through the request pipe) and wait for the response (through the response pipe)
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
-  //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
   char *request_message;
-
 
   request_message = malloc(CREATE_REQUEST_LEN);
 
+  // creates the request message
   memcpy(request_message,"OP_CODE=3",OP_CODE_LEN);
   memcpy(request_message + OP_CODE_LEN,&event_id,EVENT_ID_LEN);
   memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN,&num_rows,ROW_COL_LEN);
   memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN + ROW_COL_LEN,&num_cols,ROW_COL_LEN);
 
+  // sends the request message
   if(write(req_pipe,request_message,CREATE_REQUEST_LEN) <= 0){
     free(request_message);
     return 1;
-
   } 
 
   free(request_message);
 
   int success;
+  // reads the result of the operation from the result pipe
   if(read(resp_pipe,&success,sizeof(int)) <= 0) return 1;
 
   return success;
 }
 
+// send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys) {
-  //TODO: send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
 
   char *request_message;
 
 
   request_message = malloc(RESERVE_REQUEST_LEN);
 
+  // creates the request message
   memcpy(request_message,"OP_CODE=4",OP_CODE_LEN);
   memcpy(request_message + OP_CODE_LEN,&event_id,EVENT_ID_LEN);
   memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN,&num_seats,SEATS_LEN);
   memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN+ SEATS_LEN,xs,num_seats * SEATS_LEN);
   memcpy(request_message + OP_CODE_LEN + EVENT_ID_LEN + SEATS_LEN + num_seats * SEATS_LEN,ys,num_seats * SEATS_LEN);
 
+  // sends the request message
   if(write(req_pipe,request_message,RESERVE_REQUEST_LEN) < 0){
     free(request_message);
     return 1;
@@ -153,11 +162,13 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
   free(request_message);
   int success;
+  // reads the result of the operation from the result pipe
   if(read(resp_pipe,&success,sizeof(int)) <= 0) return 1;
 
   return success;
 }
 
+// send show request to the server (through the request pipe) and wait for the response (through the response pipe)
 int ems_show(int out_fd, unsigned int event_id) {
   char *request_message;
 
@@ -165,15 +176,15 @@ int ems_show(int out_fd, unsigned int event_id) {
   request_message = malloc(SHOW_REQUEST_LEN);
 
   // Check if memory allocation is successful
-  if (request_message == NULL) {
+  if (request_message == NULL) { // NECESSARIO?
     return 1;
   }
 
-  // Initialize the allocated memory
+  // creates the request message
   memcpy(request_message, "OP_CODE=5", OP_CODE_LEN);
   memcpy(request_message + OP_CODE_LEN, &event_id, EVENT_ID_LEN);
 
-  // Write the request message to the pipe
+  // sends the request message
   if (write(req_pipe, request_message, SHOW_REQUEST_LEN) < 0) {
     free(request_message);
     return 1;
@@ -196,7 +207,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   unsigned int *matrix = malloc(sizeof(unsigned int) * event_size);
 
   // Check if memory allocation is successful
-  if (matrix == NULL) {
+  if (matrix == NULL) { // NECESSARIO?
     return 1;
   }
 
@@ -226,10 +237,9 @@ int ems_show(int out_fd, unsigned int event_id) {
   return success;
 }
 
-
+// send list request to the server (through the request pipe) and wait for the response (through the response pipe)
 int ems_list_events(int out_fd) {
   char *request_message;
-  
 
   // Allocate memory for the request message
   request_message = malloc(LIST_REQUEST_LEN);
@@ -239,7 +249,7 @@ int ems_list_events(int out_fd) {
     return 1;
   }
 
-  // Initialize the allocated memory
+  // creates the request message
   memcpy(request_message, "OP_CODE=6", OP_CODE_LEN);
 
   // Write the request message to the pipe
@@ -266,7 +276,7 @@ int ems_list_events(int out_fd) {
   if (read(resp_pipe, &id_list, sizeof(unsigned int) * n_events) <= 0) {
     return 1;
   }
-
+  // write the event list to the output fd
   for (size_t i = 0; i < n_events; i++) {
     char buff[] = "Event: ";
     write(out_fd, buff, sizeof(buff) - 1);  // sizeof(buff) includes the null terminator, subtract 1
