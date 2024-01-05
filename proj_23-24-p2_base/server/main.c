@@ -14,9 +14,6 @@
 #include "operations.h"
 #include "eventlist.h"
 
-
-
-
 struct Queue{
     pthread_rwlock_t buffer_lock;
     void** queue_buffer;
@@ -29,7 +26,6 @@ struct Queue{
 
     pthread_mutex_t remove_from_queue_lock;
     pthread_cond_t remove_from_queue_condvar;
-
     
 };
 struct Session {
