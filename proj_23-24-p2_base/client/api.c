@@ -34,15 +34,17 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   char req_pipe_name[MAX_PIPE_PATH_NAME];
   char resp_pipe_name[MAX_PIPE_PATH_NAME];
 
-  // initializes both pipe names with \0 
   memset(req_pipe_name,'\0',MAX_PIPE_PATH_NAME);
   memset(resp_pipe_name,'\0',MAX_PIPE_PATH_NAME);
 
-  // passes the path given to the pipe name
   strcpy(req_pipe_name,req_pipe_path);
   strcpy(resp_pipe_name,resp_pipe_path);
 
   request_message = malloc(SETUP_REQUEST_LEN);
+
+  if (request_message == NULL) {
+    return 1;
+  }
 
   // creates the request message
   memcpy(request_message,"OP_CODE=1",OP_CODE_LEN);
@@ -55,7 +57,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
     return 1;
   }
 
-  // requests session
+  // sends session request to server
   if(write(server_pipe,request_message,SETUP_REQUEST_LEN) < 0){
     free(request_message);
     return 1;
@@ -98,6 +100,10 @@ int ems_quit(void) {
 
   request_message = malloc(QUIT_REQUEST_LEN);
 
+  if (request_message == NULL) {
+    return 1;
+  }
+
   // creates the request message
   memcpy(request_message,"OP_CODE=2",OP_CODE_LEN);
 
@@ -117,6 +123,10 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   char *request_message;
 
   request_message = malloc(CREATE_REQUEST_LEN);
+
+  if (request_message == NULL) {
+    return 1;
+  }
 
   // creates the request message
   memcpy(request_message,"OP_CODE=3",OP_CODE_LEN);
@@ -147,6 +157,10 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
   request_message = malloc(RESERVE_REQUEST_LEN);
 
+  if (request_message == NULL) {
+    return 1;
+  }
+
   // creates the request message
   memcpy(request_message,"OP_CODE=4",OP_CODE_LEN);
   memcpy(request_message + OP_CODE_LEN,&event_id,EVENT_ID_LEN);
@@ -176,7 +190,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   request_message = malloc(SHOW_REQUEST_LEN);
 
   // Check if memory allocation is successful
-  if (request_message == NULL) { // NECESSARIO?
+  if (request_message == NULL) {
     return 1;
   }
 
@@ -207,7 +221,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   unsigned int *matrix = malloc(sizeof(unsigned int) * event_size);
 
   // Check if memory allocation is successful
-  if (matrix == NULL) { // NECESSARIO?
+  if (matrix == NULL) { 
     return 1;
   }
 

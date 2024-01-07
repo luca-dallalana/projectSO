@@ -312,7 +312,8 @@ int process_request(int code, int request_pipe, int response_pipe){
   size_t response_size;
 
   switch (code){
-
+    
+    // quit
     case 2:
       close(request_pipe);
       close(response_pipe);
@@ -391,6 +392,8 @@ int process_request(int code, int request_pipe, int response_pipe){
       }
 
       int show_value = 0;
+
+      // gets event with the given event id
       struct Event* event = get_event_with_delay(event_id, event_list->head, event_list->tail);
 
       if (event == NULL) {
@@ -422,7 +425,7 @@ int process_request(int code, int request_pipe, int response_pipe){
           return 1;
       }
 
-      // Clean up allocated memory
+
       free(response_message);
       return 0;
 
@@ -440,6 +443,8 @@ int process_request(int code, int request_pipe, int response_pipe){
       struct ListNode* current = event_list->head;
 
       unsigned int* id = NULL;
+
+      // gets id from all existing events
       while (1) {
           id = realloc(id, (n_events + 1) * sizeof(unsigned int));
 
@@ -463,7 +468,7 @@ int process_request(int code, int request_pipe, int response_pipe){
       response_message = malloc(response_size);
 
       if (response_message == NULL) {
-          // Handle memory allocation failure
+
           free(id);
           return 1;
       }
@@ -472,7 +477,7 @@ int process_request(int code, int request_pipe, int response_pipe){
       memcpy(response_message + sizeof(int), &n_events, sizeof(int));
       memcpy(response_message + sizeof(int) + sizeof(int), id, n_events * sizeof(unsigned int));
 
-      // Use the correct size when writing to the response pipe
+      // writes response to pipe
       if (write(response_pipe, response_message, response_size) <= 0) {
           free(response_message);
           free(id);
@@ -480,7 +485,7 @@ int process_request(int code, int request_pipe, int response_pipe){
       }
 
 
-      // Clean up allocated memory
+
       free(response_message);
       free(id);
 

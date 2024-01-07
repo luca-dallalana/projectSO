@@ -16,7 +16,7 @@
 
 
 
-// Struct utilized to construct a producer/consumer queue
+// Struct that represents producer/consumer queue
 struct Queue{
 
     // Lock to change the queue
@@ -36,8 +36,10 @@ struct Queue{
 
     
 };
+
+// Struct that represents a client session
 struct Session {
-  // session id and pipes that are attached to them
+  // session id and pipe paths used to communicate with server 
   int session_id;
   char req_pipe_path[MAX_PIPE_PATH_NAME];
   char resp_pipe_path[MAX_PIPE_PATH_NAME];
@@ -45,15 +47,16 @@ struct Session {
 
 struct Queue pc_buffer;
 
+// Function that creates a queue of client requests
 int create_queue(struct Queue* queue){
-    // Allocates the correct amount of memory
+    // Allocates memory for the actual queue of clients
     void** buffer = malloc(MAX_SESSION_COUNT * sizeof(void*));
 
     if(buffer == NULL){
         printf("Failed to allocate memory for buffer\n");
         return 1;
     }
-    // Starts the buffer with the given size 
+   
     queue->queue_buffer = buffer;
     queue->queue_size = 0;
 
@@ -76,26 +79,26 @@ int create_queue(struct Queue* queue){
     return 0;
 }
 
-// Function to add a client to the list
+// Function that adds a client to the queue
 int add_element(struct Queue* queue, void* element){
 
-    // Locks the queue
+    // Locks adding condition and the number of clients in queue
     pthread_mutex_lock(&queue->add_to_queue_lock);
     pthread_mutex_lock(&queue->size_lock);
 
-    // while the queue is full
+    // While the queue is full
     while(queue->queue_size == MAX_SESSION_COUNT){
         pthread_mutex_unlock(&queue->size_lock);
         pthread_cond_wait(&queue->add_to_queue_condvar,&queue->add_to_queue_lock);
         pthread_mutex_lock(&queue->size_lock);
     }
 
-    // Locks the buffer
+    // Locks the queue buffer
     pthread_mutex_lock(&queue->buffer_lock);
-    // unlocks the queue
+    // Unlocks the adding condition so other threads can try to add elements
     pthread_mutex_unlock(&queue->add_to_queue_lock);
 
-    // Find an empty spot in the queue_buffer
+    // Find an empty spot in the queue
 
     for (int i = 0; i < MAX_SESSION_COUNT; ++i) {
         if (queue->queue_buffer[i] == NULL) {
@@ -108,7 +111,7 @@ int add_element(struct Queue* queue, void* element){
 
 
 
-    // Signal that an element has been added
+    // Signal to all threads that a client has been added
     pthread_cond_broadcast(&queue->remove_from_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
     pthread_mutex_unlock(&queue->buffer_lock);
@@ -119,7 +122,7 @@ int add_element(struct Queue* queue, void* element){
 // Function to remove a client from the list
 void* remove_element(struct Queue* queue){
 
-    // Locks the queue
+    // Locks removing condition and the number of clients in queue
     pthread_mutex_lock(&queue->remove_from_queue_lock);
     pthread_mutex_lock(&queue->size_lock);
 
@@ -130,30 +133,33 @@ void* remove_element(struct Queue* queue){
         pthread_mutex_lock(&queue->size_lock);
     }
 
-    // Locks the buffer 
+    // Locks the queue buffer 
     pthread_mutex_lock(&queue->buffer_lock);
-    // Unlocks the queue
+
+    // Unlocks the removing condition so other threads can try to remove elements
     pthread_mutex_unlock(&queue->remove_from_queue_lock);
     void* element;
-    // Searches for the one to delete
+    // Searches for a client request in queue
     for (int i = 0; i < MAX_SESSION_COUNT; ++i) {
         if (queue->queue_buffer[i] != NULL) {
             element = queue->queue_buffer[i];
-            // Deletes it
+            // Removes client from queue
             queue->queue_buffer[i] = NULL;
             --queue->queue_size;
             break;
             
         }
     }
-    // Sends signal
+    // Signal to all threads that a client has been removed from queue
     pthread_cond_broadcast(&queue->add_to_queue_condvar);
     pthread_mutex_unlock(&queue->size_lock);
     pthread_mutex_unlock(&queue->buffer_lock);
+
+    // Returns the client
     return element;
 
 }
-// Function that ends the queue
+// Function that destroys the queue
 void destroy_queue(struct Queue* queue){
     pthread_mutex_destroy(&queue->buffer_lock);
     free(queue -> queue_buffer);
@@ -168,6 +174,7 @@ void destroy_queue(struct Queue* queue){
 
 }
 
+// Function that retrieves a client from the queue and processes its request
 void* read_session_request(){
   sigset_t set;
 
@@ -192,11 +199,11 @@ void* read_session_request(){
 
     char *response_message;
 
-    // creates the session id for the response message
+
     response_message = malloc(sizeof(int));
     memcpy(response_message,&session->session_id,sizeof(int));
 
-    // Sends the id to the client
+    // Sends the session id to the client
     if(write(resp_pipe,response_message,sizeof(int)) < 0){
       close(resp_pipe);
       close(req_pipe);
@@ -235,9 +242,8 @@ void* read_session_request(){
 
 
 
-// Function that is activated when the user sends SIGURS1
-void sigusr1_handler(int sig){
-
+// Function that handles the received signal
+void sigusr1_handler(int signal){
   ems_list_events(STDOUT_FILENO);
 
 }
@@ -268,15 +274,14 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  printf("%d\n",getpid());
-
   unlink(argv[1]);
-  //TODO: Intialize server, create worker threads
+
   // creates the server pipe
   if(mkfifo(argv[1],0666) < 0) return 1;
 
   // creates the producer/consumer buffer
   if(create_queue(&pc_buffer)) return 1;
+
 
   pthread_t thread_list[MAX_SESSION_COUNT];
 
@@ -286,6 +291,9 @@ int main(int argc, char* argv[]) {
   // Creates all worker threads
   for(int i = 0; i < MAX_SESSION_COUNT; i++){
     if(pthread_create(&thread_list[i],NULL,read_session_request,NULL) != 0){
+      destroy_queue(&pc_buffer);
+      ems_terminate();
+      unlink(argv[1]);
       return 1;
     }
   }
@@ -294,38 +302,40 @@ int main(int argc, char* argv[]) {
   
 
   while (1) {
-    //TODO: Read from pipe
-    //TODO: Write new client to the producer-consumer buffer
 
     int register_pipe;
+
     // Opens the server pipe 
     if((register_pipe = open(argv[1],O_RDONLY)) < 0){
-      unlink(argv[1]);
-      return 1;
+      break;
     }
 
     char op_code[OP_CODE_LEN];
 
-    // reads the op code sent by the client
+    // Reads the op code sent by the client
     if(read(register_pipe,&op_code,OP_CODE_LEN) < 0) break;
 
     int code = get_code(op_code);
    
-    // if its the ems_setup code, begin a session
+    // If it's the session request code, begin a session
     if(code == 1){   
   
       struct Session* session = malloc(sizeof(struct Session));
+
+      if(session == NULL){
+        printf("Failed to allocate memory for session\n");
+        break;
+      }
       
       // register the request and response pipe names
       read(register_pipe,&session->req_pipe_path,MAX_PIPE_PATH_NAME);
       read(register_pipe,&session->resp_pipe_path,MAX_PIPE_PATH_NAME);
 
       session -> session_id = session_counter++;
+
       // add this client to the buffer
       add_element(&pc_buffer,session);
-      
-   
-      
+        
     }
    
     close(register_pipe);
